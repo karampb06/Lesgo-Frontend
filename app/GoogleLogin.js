@@ -1,34 +1,26 @@
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import * as AuthSession from 'expo-auth-session';
-import * as Google from 'expo-auth-session/providers/google';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import * as React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
-WebBrowser.maybeCompleteAuthSession();
+import { useAuth } from '@/contexts/auth-context';
 
 export const GOOGLE_ANDROID_CLIENT_ID =
   '927905732381-1r4nlqve9e08dhmsutguospmep7p9da1.apps.googleusercontent.com';
 
+const GOOGLE_WEB_CLIENT_ID =
+  '927905732381-dn4368p04d0gv3h8r5b9to1jkq8ti3r9.apps.googleusercontent.com';
 const ANDROID_PACKAGE_NAME = 'lesgo.app';
 const ANDROID_DEBUG_SHA1 = '5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25';
-const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const IS_ANDROID = Platform.OS === 'android';
-
-const GOOGLE_CLIENT_ID =
-  Platform.OS === 'ios'
-    ? GOOGLE_IOS_CLIENT_ID
-    : Platform.OS === 'web'
-      ? GOOGLE_WEB_CLIENT_ID
-      : GOOGLE_ANDROID_CLIENT_ID;
+const BASE_GOOGLE_SCOPES = ['profile', 'email'];
+const FREEBUSY_SCOPE = 'https://www.googleapis.com/auth/calendar.freebusy';
 
 const missingGoogleClientMessage =
   Platform.select({
-    ios: 'Google login needs an iOS OAuth client ID before it can run on an iPhone.',
-    web: 'Google login in the browser needs a Web OAuth client ID. Your Android client ID only works on an Android app build.',
+    ios: 'Google login is currently configured for Android only.',
+    web: 'Google login is currently configured for Android only.',
     default: 'Google login needs an Android OAuth client ID before it can run on Android.',
   }) ?? 'Google login is not configured on this platform.';
 
@@ -36,6 +28,7 @@ const missingGoogleClientMessage =
  * @param {any} props
  */
 export default function GoogleLogin({
+  authMode = 'login',
   label = 'Login with Google',
   loadingLabel = 'Opening Google...',
   style = null,
@@ -44,8 +37,13 @@ export default function GoogleLogin({
   onSuccessRoute = '/(tabs)/homepage',
 }) {
   const router = useRouter();
+  const { setUser } = useAuth();
   const [googleError, setGoogleError] = React.useState(null);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+  const googleScopes = React.useMemo(
+    () => (authMode === 'signup' ? [...BASE_GOOGLE_SCOPES, FREEBUSY_SCOPE] : BASE_GOOGLE_SCOPES),
+    [authMode]
+  );
 
   React.useEffect(() => {
     if (!IS_ANDROID) {
@@ -53,24 +51,17 @@ export default function GoogleLogin({
     }
 
     const nativeGoogleConfig = {
-      scopes: ['profile', 'email'],
+      scopes: googleScopes,
     };
 
-    if (GOOGLE_WEB_CLIENT_ID) {
+    if (authMode === 'signup') {
       nativeGoogleConfig.webClientId = GOOGLE_WEB_CLIENT_ID;
+      nativeGoogleConfig.offlineAccess = true;
+      nativeGoogleConfig.forceCodeForRefreshToken = true;
     }
 
     GoogleSignin.configure(nativeGoogleConfig);
-  }, []);
-
-  const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-    clientId: GOOGLE_CLIENT_ID,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    scopes: ['openid', 'profile', 'email'],
-    selectAccount: true,
-  });
+  }, [authMode, googleScopes]);
 
   const handleGoogleLogin = async () => {
     if (Constants.appOwnership === 'expo') {
@@ -80,7 +71,7 @@ export default function GoogleLogin({
       return;
     }
 
-    if (!IS_ANDROID && !GOOGLE_CLIENT_ID) {
+    if (!IS_ANDROID) {
       setGoogleError(missingGoogleClientMessage);
       return;
     }
@@ -99,11 +90,44 @@ export default function GoogleLogin({
           return;
         }
 
+        const permissionResult =
+          authMode === 'signup'
+            ? await GoogleSignin.addScopes({ scopes: [FREEBUSY_SCOPE] })
+            : null;
+        const user = permissionResult?.data?.user ?? result.data.user;
+        const tokens = await GoogleSignin.getTokens();
+
+        setUser({
+          id: user.id,
+          name: user.name ?? user.email ?? 'Google User',
+          email: user.email ?? '',
+          picture: user.photo,
+        });
+
+        console.log(
+          authMode === 'signup' ? 'Google Signup Details:' : 'Google Login Success:',
+          {
+            googleId: user.id,
+            name: user.name,
+            email: user.email,
+            profilePicture: user.photo,
+            homeArea: '',
+            homeLat: null,
+            homeLng: null,
+            googleAccessToken: tokens.accessToken,
+            googleRefreshToken: null,
+            googleTokenExpiry: null,
+            googleIdToken: tokens.idToken,
+            googleServerAuthCode: permissionResult?.data?.serverAuthCode ?? result.data.serverAuthCode,
+            grantedScopes: permissionResult?.data?.scopes ?? result.data.scopes ?? googleScopes,
+          }
+        );
+
         console.log('Google Login Success:', {
-          googleId: result.data.user.id,
-          email: result.data.user.email,
-          name: result.data.user.name,
-          picture: result.data.user.photo,
+          googleId: user.id,
+          email: user.email,
+          name: user.name,
+          picture: user.photo,
         });
 
         setGoogleError(null);
@@ -123,87 +147,9 @@ export default function GoogleLogin({
 
       return;
     }
-
-    try {
-      const result = await promptGoogleAsync();
-
-      if (result.type !== 'success') {
-        setIsGoogleLoading(false);
-      }
-    } catch (error) {
-      console.warn('Google Login Error:', error);
-      setGoogleError('Google login could not start. Please try again.');
-      setIsGoogleLoading(false);
-    }
   };
 
-  React.useEffect(() => {
-    let isMounted = true;
-
-    async function completeGoogleLogin() {
-      if (!googleResponse) {
-        return;
-      }
-
-      if (googleResponse.type === 'success') {
-        const accessToken =
-          googleResponse.authentication?.accessToken ?? googleResponse.params.access_token;
-
-        if (!accessToken) {
-          setGoogleError('Google did not return an access token. Please try again.');
-          setIsGoogleLoading(false);
-          return;
-        }
-
-        try {
-          const profile = await AuthSession.fetchUserInfoAsync(
-            { accessToken },
-            Google.discovery
-          );
-
-          if (!isMounted) {
-            return;
-          }
-
-          console.log('Google Login Success:', {
-            googleId: profile.sub ?? profile.id,
-            email: profile.email,
-            name: profile.name,
-            picture: profile.picture,
-          });
-
-          setGoogleError(null);
-          router.replace(onSuccessRoute);
-        } catch (error) {
-          console.warn('Google Profile Error:', error);
-
-          if (isMounted) {
-            setGoogleError('Google login worked, but the profile could not be loaded.');
-          }
-        } finally {
-          if (isMounted) {
-            setIsGoogleLoading(false);
-          }
-        }
-
-        return;
-      }
-
-      if (googleResponse.type === 'error') {
-        setGoogleError('Google login failed. Please check your OAuth client setup.');
-      }
-
-      setIsGoogleLoading(false);
-    }
-
-    completeGoogleLogin();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [googleResponse, onSuccessRoute, router]);
-
-  const disabled = isGoogleLoading || (!IS_ANDROID && !googleRequest);
+  const disabled = isGoogleLoading || !IS_ANDROID;
 
   return (
     <>

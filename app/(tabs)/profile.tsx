@@ -1,5 +1,4 @@
 import { useAuth } from '@/contexts/auth-context';
-import { updateBackendUser } from '@/services/user-api';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -23,7 +22,7 @@ function getInitial(name?: string, email?: string) {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, token, updateUser, logout } = useAuth();
+  const { user, updateUser, logout } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -42,19 +41,8 @@ export default function ProfileScreen() {
       contactNumber: contactNumber.trim(),
     };
 
-    try {
-      if (user?.backendId) {
-        const savedUser = await updateBackendUser(user, token, profileUpdate);
-        updateUser(savedUser);
-      } else {
-        updateUser(profileUpdate);
-      }
-
-      setStatusMessage('Profile updated');
-    } catch (error) {
-      console.warn('Backend profile update failed:', error);
-      setStatusMessage(error instanceof Error ? error.message : 'Profile could not be saved');
-    }
+    updateUser(profileUpdate);
+    setStatusMessage('Profile updated');
   };
 
   const handleLogout = async () => {
