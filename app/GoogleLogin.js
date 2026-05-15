@@ -11,6 +11,7 @@ export const GOOGLE_ANDROID_CLIENT_ID =
 
 const GOOGLE_WEB_CLIENT_ID =
   '927905732381-dn4368p04d0gv3h8r5b9to1jkq8ti3r9.apps.googleusercontent.com';
+const API_BASE_URL = 'http://192.168.88.7:3001';
 const ANDROID_PACKAGE_NAME = 'lesgo.app';
 const ANDROID_DEBUG_SHA1 = '5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25';
 const IS_ANDROID = Platform.OS === 'android';
@@ -96,29 +97,60 @@ export default function GoogleLogin({
             : null;
         const user = permissionResult?.data?.user ?? result.data.user;
         const tokens = await GoogleSignin.getTokens();
+        const serverAuthCode = permissionResult?.data?.serverAuthCode ?? result.data.serverAuthCode;
+
+        const response = await fetch(`${API_BASE_URL}/auth/google`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            authMode,
+            idToken: tokens.idToken ?? result.data.idToken,
+            accessToken: tokens.accessToken,
+            serverAuthCode,
+            profile: {
+              googleId: user.id,
+              name: user.name,
+              email: user.email,
+              profilePicture: user.photo,
+              homeArea: '',
+              homeLat: null,
+              homeLng: null,
+            },
+          }),
+        });
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(data?.message ?? `Backend auth failed with status ${response.status}`);
+        }
+
+        const savedUser = data?.user;
 
         setUser({
-          id: user.id,
-          name: user.name ?? user.email ?? 'Google User',
-          email: user.email ?? '',
-          picture: user.photo,
+          id: savedUser?.googleId ?? user.id,
+          name: savedUser?.name ?? user.name ?? user.email ?? 'Google User',
+          email: savedUser?.email ?? user.email ?? '',
+          picture: savedUser?.profilePicture ?? user.photo,
         });
 
         console.log(
-          authMode === 'signup' ? 'Google Signup Details:' : 'Google Login Success:',
+          authMode === 'signup' ? 'Google Signup Saved Details:' : 'Google Login Saved Details:',
           {
-            googleId: user.id,
-            name: user.name,
-            email: user.email,
-            profilePicture: user.photo,
-            homeArea: '',
-            homeLat: null,
-            homeLng: null,
-            googleAccessToken: tokens.accessToken,
-            googleRefreshToken: null,
-            googleTokenExpiry: null,
+            mongoId: savedUser?._id,
+            googleId: savedUser?.googleId ?? user.id,
+            name: savedUser?.name ?? user.name,
+            email: savedUser?.email ?? user.email,
+            profilePicture: savedUser?.profilePicture ?? user.photo,
+            homeArea: savedUser?.homeArea ?? '',
+            homeLat: savedUser?.homeLat ?? null,
+            homeLng: savedUser?.homeLng ?? null,
+            googleAccessToken: savedUser?.googleAccessToken ?? tokens.accessToken,
+            googleRefreshToken: savedUser?.googleRefreshToken ?? null,
+            googleTokenExpiry: savedUser?.googleTokenExpiry ?? null,
             googleIdToken: tokens.idToken,
-            googleServerAuthCode: permissionResult?.data?.serverAuthCode ?? result.data.serverAuthCode,
+            googleServerAuthCode: serverAuthCode,
             grantedScopes: permissionResult?.data?.scopes ?? result.data.scopes ?? googleScopes,
           }
         );
@@ -139,7 +171,7 @@ export default function GoogleLogin({
         setGoogleError(
           isDeveloperError
             ? `Google rejected this APK signing key. Add Android OAuth package ${ANDROID_PACKAGE_NAME} with SHA-1 ${ANDROID_DEBUG_SHA1} in Google Cloud.`
-            : 'Google login could not start. Please try again.'
+            : error?.message ?? 'Google login could not start. Please try again.'
         );
       } finally {
         setIsGoogleLoading(false);
