@@ -38,7 +38,7 @@ export default function GoogleLogin({
   onSuccessRoute = '/(tabs)/homepage',
 }) {
   const router = useRouter();
-  const { setUser } = useAuth();
+  const { setSession } = useAuth();
   const [googleError, setGoogleError] = React.useState(null);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const googleScopes = React.useMemo(
@@ -127,13 +127,20 @@ export default function GoogleLogin({
         }
 
         const savedUser = data?.user;
+        const jwtToken = data?.token;
 
-        setUser({
+        if (!savedUser || !jwtToken) {
+          throw new Error('Backend did not return a complete auth session.');
+        }
+
+        setSession({
+          backendId: savedUser._id,
           id: savedUser?.googleId ?? user.id,
           name: savedUser?.name ?? user.name ?? user.email ?? 'Google User',
           email: savedUser?.email ?? user.email ?? '',
           picture: savedUser?.profilePicture ?? user.photo,
-        });
+          contactNumber: savedUser?.contactNumber ?? '',
+        }, jwtToken);
 
         console.log(
           authMode === 'signup' ? 'Google Signup Saved Details:' : 'Google Login Saved Details:',

@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const API_BASE_URL = 'http://192.168.88.7:3001';
+
 function getInitial(name?: string, email?: string) {
   const source = name?.trim() || email?.trim() || 'U';
   return source.charAt(0).toUpperCase();
@@ -22,7 +24,7 @@ function getInitial(name?: string, email?: string) {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, updateUser, logout } = useAuth();
+  const { user, token, updateUser, logout } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -41,8 +43,40 @@ export default function ProfileScreen() {
       contactNumber: contactNumber.trim(),
     };
 
-    updateUser(profileUpdate);
-    setStatusMessage('Profile updated');
+    try {
+      if (!user?.backendId || !token) {
+        updateUser(profileUpdate);
+        setStatusMessage('Profile updated locally');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/users/${user.backendId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(profileUpdate),
+      });
+      const savedUser = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(savedUser?.error ?? 'Profile could not be saved');
+      }
+
+      updateUser({
+        backendId: savedUser._id ?? user.backendId,
+        id: savedUser.googleId ?? user.id,
+        name: savedUser.name ?? profileUpdate.name,
+        email: savedUser.email ?? profileUpdate.email,
+        picture: savedUser.profilePicture ?? user.picture,
+        contactNumber: savedUser.contactNumber ?? profileUpdate.contactNumber,
+      });
+      setStatusMessage('Profile updated');
+    } catch (error) {
+      console.warn('Profile update failed:', error);
+      setStatusMessage(error instanceof Error ? error.message : 'Profile could not be saved');
+    }
   };
 
   const handleLogout = async () => {

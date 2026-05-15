@@ -1,7 +1,9 @@
 import { HangoutPlansProvider } from '@/contexts/hangout-plans-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
+
+import { useAuth } from '@/contexts/auth-context';
 
 const TAB_BLUE = '#1f5d86';
 const TAB_MUTED = '#111827';
@@ -29,6 +31,12 @@ function TabIcon({
 }
 
 export default function TabLayout() {
+  const { user, token } = useAuth();
+
+  if (!user || !token) {
+    return <Redirect href="/login" />;
+  }
+
   return (
     <HangoutPlansProvider>
       <Tabs

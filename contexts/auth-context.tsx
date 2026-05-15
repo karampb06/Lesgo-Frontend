@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useContext, useState } from 'react';
 
 export type AuthUser = {
+  backendId?: string;
   id: string;
   name: string;
   email: string;
@@ -10,7 +11,9 @@ export type AuthUser = {
 
 type AuthContextValue = {
   user: AuthUser | null;
+  token: string | null;
   setUser: (user: AuthUser | null) => void;
+  setSession: (user: AuthUser, token: string) => void;
   updateUser: (profile: Partial<AuthUser>) => void;
   logout: () => void;
 };
@@ -19,6 +22,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+
+  const setSession = (nextUser: AuthUser, nextToken: string) => {
+    setUser(nextUser);
+    setToken(nextToken);
+  };
 
   const updateUser = (profile: Partial<AuthUser>) => {
     setUser((currentUser) => {
@@ -35,10 +44,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const logout = () => {
     setUser(null);
+    setToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, updateUser, logout }}>
+    <AuthContext.Provider value={{ user, token, setUser, setSession, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
