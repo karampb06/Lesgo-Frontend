@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'http://192.168.88.7:3001';
+import { API_BASE_URL } from '@/constants/api';
 
 function getInitial(name?: string, email?: string) {
   const source = name?.trim() || email?.trim() || 'U';
@@ -71,6 +71,7 @@ export default function ProfileScreen() {
         email: savedUser.email ?? profileUpdate.email,
         picture: savedUser.profilePicture ?? user.picture,
         contactNumber: savedUser.contactNumber ?? profileUpdate.contactNumber,
+        friendCode: savedUser.friendCode ?? user.friendCode,
       });
       setStatusMessage('Profile updated');
     } catch (error) {
@@ -107,6 +108,11 @@ export default function ProfileScreen() {
             ) : (
               <Text style={styles.avatarText}>{getInitial(user?.name, user?.email)}</Text>
             )}
+          </View>
+
+          <View style={styles.friendCodeCard}>
+            <Text style={styles.friendCodeLabel}>Your Friend Code</Text>
+            <Text style={styles.friendCodeValue}>{user?.friendCode ?? 'Sign in again to generate'}</Text>
           </View>
 
           <View style={styles.form}>
@@ -197,6 +203,29 @@ const styles = StyleSheet.create({
 
   form: {
     width: '100%',
+  },
+
+  friendCodeCard: {
+    width: '100%',
+    borderRadius: 8,
+    backgroundColor: '#eef2fa',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+
+  friendCodeLabel: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+
+  friendCodeValue: {
+    color: '#0f172a',
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 2,
   },
 
   input: {

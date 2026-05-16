@@ -5,13 +5,13 @@ import * as React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 import { useAuth } from '@/contexts/auth-context';
+import { API_BASE_URL } from '@/constants/api';
 
 export const GOOGLE_ANDROID_CLIENT_ID =
   '927905732381-1r4nlqve9e08dhmsutguospmep7p9da1.apps.googleusercontent.com';
 
 const GOOGLE_WEB_CLIENT_ID =
   '927905732381-dn4368p04d0gv3h8r5b9to1jkq8ti3r9.apps.googleusercontent.com';
-const API_BASE_URL = 'http://192.168.88.7:3001';
 const ANDROID_PACKAGE_NAME = 'lesgo.app';
 const ANDROID_DEBUG_SHA1 = '5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25';
 const IS_ANDROID = Platform.OS === 'android';
@@ -140,6 +140,7 @@ export default function GoogleLogin({
           email: savedUser?.email ?? user.email ?? '',
           picture: savedUser?.profilePicture ?? user.photo,
           contactNumber: savedUser?.contactNumber ?? '',
+          friendCode: savedUser?.friendCode,
         }, jwtToken);
 
         console.log(

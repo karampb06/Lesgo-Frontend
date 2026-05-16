@@ -132,6 +132,12 @@ export default function TabLayout() {
             href: null,
           }}
         />
+        <Tabs.Screen
+          name="chat"
+          options={{
+            href: null,
+          }}
+        />
       </Tabs>
     </HangoutPlansProvider>
   );

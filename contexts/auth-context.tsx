@@ -5,6 +5,7 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
+  friendCode?: string;
   picture?: string | null;
   contactNumber?: string;
 };
