@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '@/constants/api';
+import { ENV } from '@/constants/env';
 import { useAuth } from '@/contexts/auth-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -35,7 +35,7 @@ export default function ChatScreen() {
 
   const apiFetch = React.useCallback(
     async (path: string, options: RequestInit = {}) => {
-      const response = await fetch(`${API_BASE_URL}${path}`, {
+      const response = await fetch(`${ENV.API_BASE_URL}${path}`, {
         ...options,
         headers: {
           Authorization: `Bearer ${token}`,
@@ -101,18 +101,24 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
-            <Ionicons name="chevron-back" size={24} color="#ffffff" />
+            <Ionicons name="chevron-back" size={20} color="#1f5d86" />
           </TouchableOpacity>
-          <Text style={styles.title} numberOfLines={1}>{title ?? 'Chat'}</Text>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title} numberOfLines={1}>{title ?? 'Chat'}</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>Direct chat</Text>
+          </View>
         </View>
 
         <ScrollView
+          style={styles.messagesScroll}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {messages.map((message) => {
             const isMine = message.senderId === user?.backendId;
@@ -153,7 +159,7 @@ export default function ChatScreen() {
             multiline
           />
           <TouchableOpacity style={styles.sendButton} onPress={sendMessage} activeOpacity={0.85}>
-            <Ionicons name="send" size={18} color="#ffffff" />
+            <Text style={styles.sendButtonText}>Send</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -172,52 +178,69 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    height: 58,
+    minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#eef2fa',
   },
 
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#1f5d86',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 8,
+  },
+
+  headerCopy: {
+    flex: 1,
   },
 
   title: {
-    flex: 1,
     color: '#0f172a',
-    fontSize: 20,
+    fontSize: 13,
     fontWeight: '900',
+  },
+
+  subtitle: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+
+  messagesScroll: {
+    flex: 1,
   },
 
   messagesContent: {
     flexGrow: 1,
     paddingHorizontal: 12,
-    paddingBottom: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
     justifyContent: 'flex-end',
   },
 
   messageBubble: {
-    maxWidth: '82%',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 8,
+    maxWidth: '74%',
+    borderRadius: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginBottom: 12,
   },
 
   myMessageBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#1f5d86',
+    backgroundColor: '#008f62',
   },
 
   theirMessageBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#009f71',
   },
 
   messageText: {
@@ -231,7 +254,7 @@ const styles = StyleSheet.create({
   },
 
   theirMessageText: {
-    color: '#0f172a',
+    color: '#ffffff',
   },
 
   messageTime: {
@@ -246,7 +269,7 @@ const styles = StyleSheet.create({
   },
 
   theirMessageTime: {
-    color: '#64748b',
+    color: '#d1fae5',
   },
 
   emptyText: {
@@ -268,31 +291,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingTop: 8,
-    paddingBottom: 12,
-    backgroundColor: '#a9b2bd',
+    paddingBottom: 10,
+    backgroundColor: '#eef2fa',
   },
 
   input: {
     flex: 1,
-    minHeight: 42,
-    maxHeight: 96,
-    borderRadius: 8,
+    minHeight: 34,
+    maxHeight: 88,
+    borderRadius: 4,
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
 
   sendButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 58,
+    minHeight: 34,
+    borderRadius: 4,
     backgroundColor: '#1f5d86',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  sendButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
   },
 });

@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { API_BASE_URL } from '@/constants/api';
+import { ENV } from '@/constants/env';
 
 function getInitial(name?: string, email?: string) {
   const source = name?.trim() || email?.trim() || 'U';
@@ -50,7 +50,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/users/${user.backendId}`, {
+      const response = await fetch(`${ENV.API_BASE_URL}/users/${user.backendId}`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,

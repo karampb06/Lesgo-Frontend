@@ -5,18 +5,12 @@ import * as React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 import { useAuth } from '@/contexts/auth-context';
-import { API_BASE_URL } from '@/constants/api';
+import { ENV } from '@/constants/env';
 
 export const GOOGLE_ANDROID_CLIENT_ID =
-  '927905732381-1r4nlqve9e08dhmsutguospmep7p9da1.apps.googleusercontent.com';
+  ENV.GOOGLE_ANDROID_CLIENT_ID;
 
-const GOOGLE_WEB_CLIENT_ID =
-  '927905732381-dn4368p04d0gv3h8r5b9to1jkq8ti3r9.apps.googleusercontent.com';
-const ANDROID_PACKAGE_NAME = 'lesgo.app';
-const ANDROID_DEBUG_SHA1 = '5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25';
 const IS_ANDROID = Platform.OS === 'android';
-const BASE_GOOGLE_SCOPES = ['profile', 'email'];
-const FREEBUSY_SCOPE = 'https://www.googleapis.com/auth/calendar.freebusy';
 
 const missingGoogleClientMessage =
   Platform.select({
@@ -42,7 +36,11 @@ export default function GoogleLogin({
   const [googleError, setGoogleError] = React.useState(null);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const googleScopes = React.useMemo(
-    () => (authMode === 'signup' ? [...BASE_GOOGLE_SCOPES, FREEBUSY_SCOPE] : BASE_GOOGLE_SCOPES),
+    () => (
+      authMode === 'signup'
+        ? [...ENV.GOOGLE_BASE_SCOPES, ENV.GOOGLE_FREEBUSY_SCOPE]
+        : ENV.GOOGLE_BASE_SCOPES
+    ),
     [authMode]
   );
 
@@ -56,7 +54,7 @@ export default function GoogleLogin({
     };
 
     if (authMode === 'signup') {
-      nativeGoogleConfig.webClientId = GOOGLE_WEB_CLIENT_ID;
+      nativeGoogleConfig.webClientId = ENV.GOOGLE_WEB_CLIENT_ID;
       nativeGoogleConfig.offlineAccess = true;
       nativeGoogleConfig.forceCodeForRefreshToken = true;
     }
@@ -93,13 +91,13 @@ export default function GoogleLogin({
 
         const permissionResult =
           authMode === 'signup'
-            ? await GoogleSignin.addScopes({ scopes: [FREEBUSY_SCOPE] })
+            ? await GoogleSignin.addScopes({ scopes: [ENV.GOOGLE_FREEBUSY_SCOPE] })
             : null;
         const user = permissionResult?.data?.user ?? result.data.user;
         const tokens = await GoogleSignin.getTokens();
         const serverAuthCode = permissionResult?.data?.serverAuthCode ?? result.data.serverAuthCode;
 
-        const response = await fetch(`${API_BASE_URL}/auth/google`, {
+        const response = await fetch(`${ENV.API_BASE_URL}/auth/google`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -178,7 +176,7 @@ export default function GoogleLogin({
 
         setGoogleError(
           isDeveloperError
-            ? `Google rejected this APK signing key. Add Android OAuth package ${ANDROID_PACKAGE_NAME} with SHA-1 ${ANDROID_DEBUG_SHA1} in Google Cloud.`
+            ? `Google rejected this APK signing key. Add Android OAuth package ${ENV.ANDROID_PACKAGE_NAME} with SHA-1 ${ENV.ANDROID_DEBUG_SHA1} in Google Cloud.`
             : error?.message ?? 'Google login could not start. Please try again.'
         );
       } finally {

@@ -1,7 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import { ENV } from '@/constants/env';
+import { useAuth } from '@/contexts/auth-context';
 import { useHangoutPlans } from '@/contexts/hangout-plans-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import React from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -28,8 +31,36 @@ const trendingPlaces = [
 
 export default function HomePage() {
   const router = useRouter();
+  const { token } = useAuth();
   const { plans } = useHangoutPlans();
   const upcomingPlans = plans.slice(0, 2);
+  const [requestCount, setRequestCount] = React.useState(0);
+
+  const loadRequestCount = React.useCallback(async () => {
+    if (!token) {
+      setRequestCount(0);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${ENV.API_BASE_URL}/social/friends/requests`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json().catch(() => null);
+
+      if (response.ok) {
+        setRequestCount(data?.requests?.length ?? 0);
+      }
+    } catch (error) {
+      console.warn('Friend request notification count failed:', error);
+    }
+  }, [token]);
+
+  React.useEffect(() => {
+    loadRequestCount();
+  }, [loadRequestCount]);
 
   const openHangoutPlans = () => {
     router.push('/(tabs)/hangoutplans');
@@ -58,8 +89,17 @@ export default function HomePage() {
             <Ionicons name="search" size={18} color="#334155" />
           </View>
 
-          <TouchableOpacity style={styles.notificationButton} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => router.push('/(tabs)/messages')}
+            activeOpacity={0.8}
+          >
             <Ionicons name="notifications-outline" size={26} color="#ffffff" />
+            {requestCount ? (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{requestCount}</Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
         </View>
 
@@ -179,6 +219,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#1f5d86',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+
+  notificationBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
   },
 
   sectionTitle: {

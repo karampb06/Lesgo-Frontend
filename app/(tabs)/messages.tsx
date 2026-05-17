@@ -1,9 +1,11 @@
-import { API_BASE_URL } from '@/constants/api';
+import { ENV } from '@/constants/env';
 import { useAuth } from '@/contexts/auth-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
   ActivityIndicator,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -34,6 +36,16 @@ type Conversation = {
   updatedAt?: string;
 };
 
+type ChatRow = {
+  id: string;
+  title: string;
+  subtitle: string;
+  initials: string;
+  conversationId?: string;
+  friend?: UserSummary;
+  updatedAt?: string;
+};
+
 export default function MessagesScreen() {
   const router = useRouter();
   const { token, user } = useAuth();
@@ -43,10 +55,12 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [statusMessage, setStatusMessage] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isAddFriendVisible, setIsAddFriendVisible] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<'all' | 'groups'>('all');
 
   const apiFetch = React.useCallback(
     async (path: string, options: RequestInit = {}) => {
-      const response = await fetch(`${API_BASE_URL}${path}`, {
+      const response = await fetch(`${ENV.API_BASE_URL}${path}`, {
         ...options,
         headers: {
           Authorization: `Bearer ${token}`,
@@ -82,7 +96,7 @@ export default function MessagesScreen() {
       setRequests(requestsData.requests ?? []);
       setConversations(conversationsData.conversations ?? []);
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : 'Could not load messages');
+      setStatusMessage(error instanceof Error ? error.message : 'Could not load chats');
     } finally {
       setIsLoading(false);
     }
@@ -140,133 +154,213 @@ export default function MessagesScreen() {
     }
   };
 
-  const getConversationTitle = (conversation: Conversation) => {
-    const otherParticipants = conversation.participants.filter(
-      (participant) => participant.id !== user?.backendId
-    );
+  const getConversationFriend = React.useCallback(
+    (conversation: Conversation) =>
+      conversation.participants.find((participant) => participant.id !== user?.backendId),
+    [user?.backendId]
+  );
 
-    return otherParticipants.map((participant) => participant.name).join(', ') || 'Chat';
+  const chatRows = React.useMemo(() => {
+    const conversationRows: ChatRow[] = conversations.map((conversation) => {
+      const friend = getConversationFriend(conversation);
+      const title = friend?.name ?? 'Chat';
+
+      return {
+        id: `conversation-${conversation.id}`,
+        title,
+        subtitle: conversation.updatedAt
+          ? new Date(conversation.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : 'Tap to continue',
+        initials: getInitials(title),
+        conversationId: conversation.id,
+        updatedAt: conversation.updatedAt,
+      };
+    });
+    const conversationFriendIds = new Set(
+      conversations.map(getConversationFriend).filter(Boolean).map((friend) => friend?.id)
+    );
+    const friendRows: ChatRow[] = friends
+      .map((friendship) => friendship.friend)
+      .filter((friend): friend is UserSummary => Boolean(friend && !conversationFriendIds.has(friend.id)))
+      .map((friend) => ({
+        id: `friend-${friend.id}`,
+        title: friend.name,
+        subtitle: friend.friendCode ?? 'Start a chat',
+        initials: getInitials(friend.name),
+        friend,
+      }));
+
+    return [...conversationRows, ...friendRows].sort((first, second) => {
+      const firstDate = first.updatedAt ? new Date(first.updatedAt).getTime() : 0;
+      const secondDate = second.updatedAt ? new Date(second.updatedAt).getTime() : 0;
+
+      return secondDate - firstDate;
+    });
+  }, [conversations, friends, getConversationFriend]);
+
+  const openChatRow = (row: ChatRow) => {
+    if (row.conversationId) {
+      router.push({
+        pathname: '/(tabs)/chat',
+        params: {
+          conversationId: row.conversationId,
+          title: row.title,
+        },
+      });
+      return;
+    }
+
+    if (row.friend) {
+      startChat(row.friend);
+    }
   };
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={styles.content}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Messages</Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={loadSocialData} activeOpacity={0.8}>
-            <Text style={styles.refreshText}>{isLoading ? '...' : 'Refresh'}</Text>
+          <Text style={styles.title}>CHATS</Text>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => setIsAddFriendVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={24} color="#ffffff" />
+            {requests.length ? (
+              <View style={styles.requestBadge}>
+                <Text style={styles.requestBadgeText}>{requests.length}</Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
         </View>
 
-        <View style={styles.friendCodeCard}>
-          <Text style={styles.friendCodeLabel}>Your Friend Code</Text>
-          <Text style={styles.friendCodeValue}>{user?.friendCode ?? 'Unavailable'}</Text>
-        </View>
-
-        <View style={styles.addRow}>
-          <TextInput
-            value={friendCode}
-            onChangeText={setFriendCode}
-            placeholder="Friend code"
-            placeholderTextColor="#64748b"
-            autoCapitalize="characters"
-            style={styles.addInput}
-          />
-          <TouchableOpacity style={styles.addButton} onPress={sendFriendRequest} activeOpacity={0.85}>
-            <Text style={styles.addButtonText}>Add</Text>
+        <View style={styles.segmentedControl}>
+          <TouchableOpacity
+            style={[styles.segmentButton, activeTab === 'all' && styles.activeSegmentButton]}
+            onPress={() => setActiveTab('all')}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.segmentText, activeTab === 'all' && styles.activeSegmentText]}>
+              ALL CHATS
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentButton, activeTab === 'groups' && styles.activeSegmentButton]}
+            onPress={() => setActiveTab('groups')}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.segmentText, activeTab === 'groups' && styles.activeSegmentText]}>
+              GROUP CHATS
+            </Text>
           </TouchableOpacity>
         </View>
 
         {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
 
-        <SectionTitle title="Requests" />
-        {requests.length ? (
-          requests.map((request) => (
-            <View key={request.id} style={styles.listRow}>
-              <View style={styles.rowCopy}>
-                <Text style={styles.rowTitle}>{request.requester?.name ?? 'Unknown user'}</Text>
-                <Text style={styles.rowSubtitle}>{request.requester?.friendCode}</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.smallButton}
-                onPress={() => acceptRequest(request.id)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.smallButtonText}>Accept</Text>
-              </TouchableOpacity>
-            </View>
-          ))
+        {isLoading ? <ActivityIndicator color="#1f5d86" style={styles.loader} /> : null}
+
+        {activeTab === 'groups' ? (
+          <View style={styles.groupPlaceholder}>
+            <Ionicons name="people" size={30} color="#1f5d86" />
+            <Text style={styles.groupPlaceholderTitle}>Group chats</Text>
+            <Text style={styles.groupPlaceholderText}>Coming soon</Text>
+          </View>
         ) : (
-          <EmptyState label="No pending requests" />
-        )}
-
-        <SectionTitle title="Friends" />
-        {friends.length ? (
-          friends.map((friendship) => {
-            const friend = friendship.friend;
-
-            if (!friend) {
-              return null;
-            }
-
-            return (
-              <View key={friendship.id} style={styles.listRow}>
-                <View style={styles.rowCopy}>
-                  <Text style={styles.rowTitle}>{friend.name}</Text>
-                  <Text style={styles.rowSubtitle}>{friend.friendCode}</Text>
-                </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
+            {chatRows.length ? (
+              chatRows.map((row) => (
                 <TouchableOpacity
-                  style={styles.smallButton}
-                  onPress={() => startChat(friend)}
+                  key={row.id}
+                  style={styles.chatRow}
+                  onPress={() => openChatRow(row)}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.smallButtonText}>Chat</Text>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{row.initials}</Text>
+                  </View>
+                  <View style={styles.rowCopy}>
+                    <Text style={styles.rowTitle}>{row.title}</Text>
+                    <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#64748b" />
                 </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No chats yet</Text>
+                <Text style={styles.emptyText}>Tap + to add a friend.</Text>
               </View>
-            );
-          })
-        ) : (
-          <EmptyState label="No friends yet" />
+            )}
+          </ScrollView>
         )}
+      </View>
 
-        <SectionTitle title="Chats" />
-        {isLoading ? <ActivityIndicator color="#1f5d86" /> : null}
-        {conversations.length ? (
-          conversations.map((conversation) => (
-            <TouchableOpacity
-              key={conversation.id}
-              style={styles.chatRow}
-              onPress={() =>
-                router.push({
-                  pathname: '/(tabs)/chat',
-                  params: {
-                    conversationId: conversation.id,
-                    title: getConversationTitle(conversation),
-                  },
-                })
-              }
-              activeOpacity={0.85}
-            >
-              <Text style={styles.rowTitle}>{getConversationTitle(conversation)}</Text>
-              <Text style={styles.rowSubtitle}>
-                {conversation.updatedAt ? new Date(conversation.updatedAt).toLocaleString() : ''}
-              </Text>
+      <Modal
+        visible={isAddFriendVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsAddFriendVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalPanel}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Friend</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setIsAddFriendVisible(false)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="close" size={20} color="#0f172a" />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              value={friendCode}
+              onChangeText={setFriendCode}
+              placeholder="Friend code"
+              placeholderTextColor="#64748b"
+              autoCapitalize="characters"
+              style={styles.friendCodeInput}
+            />
+            <TouchableOpacity style={styles.addFriendButton} onPress={sendFriendRequest} activeOpacity={0.85}>
+              <Text style={styles.addFriendButtonText}>Send Request</Text>
             </TouchableOpacity>
-          ))
-        ) : (
-          <EmptyState label="No chats yet" />
-        )}
-      </ScrollView>
+
+            <Text style={styles.modalSectionTitle}>Requests</Text>
+            {requests.length ? (
+              requests.map((request) => (
+                <View key={request.id} style={styles.requestRow}>
+                  <View style={styles.rowCopy}>
+                    <Text style={styles.rowTitle}>{request.requester?.name ?? 'Unknown user'}</Text>
+                    <Text style={styles.rowSubtitle}>{request.requester?.friendCode}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.acceptButton}
+                    onPress={() => acceptRequest(request.id)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.acceptButtonText}>Accept</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.modalEmptyText}>No pending requests</Text>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
-}
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
 
-function EmptyState({ label }: { label: string }) {
-  return <Text style={styles.emptyText}>{label}</Text>;
+  if (!parts.length) {
+    return '?';
+  }
+
+  return parts.slice(0, 2).map((part) => part[0].toUpperCase()).join('');
 }
 
 const styles = StyleSheet.create({
@@ -276,9 +370,10 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 12,
+    flex: 1,
+    paddingHorizontal: 14,
     paddingTop: 24,
-    paddingBottom: 28,
+    paddingBottom: 6,
   },
 
   headerRow: {
@@ -290,77 +385,68 @@ const styles = StyleSheet.create({
 
   title: {
     color: '#0f172a',
-    fontSize: 26,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '900',
   },
 
-  refreshButton: {
-    minWidth: 72,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  refreshText: {
-    color: '#1f5d86',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-
-  friendCodeCard: {
-    borderRadius: 8,
-    backgroundColor: '#eef2fa',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-
-  friendCodeLabel: {
-    color: '#64748b',
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-
-  friendCodeValue: {
-    color: '#0f172a',
-    fontSize: 20,
-    fontWeight: '900',
-    marginTop: 2,
-  },
-
-  addRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-
-  addInput: {
-    flex: 1,
-    height: 42,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    color: '#0f172a',
-    fontSize: 14,
-    fontWeight: '700',
-    paddingHorizontal: 12,
-  },
-
-  addButton: {
-    width: 74,
-    height: 42,
-    borderRadius: 8,
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#1f5d86',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  addButtonText: {
+  requestBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+
+  requestBadgeText: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: '900',
+  },
+
+  segmentedControl: {
+    width: 172,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    padding: 3,
+    marginBottom: 14,
+  },
+
+  segmentButton: {
+    flex: 1,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  activeSegmentButton: {
+    backgroundColor: '#1f5d86',
+  },
+
+  segmentText: {
+    color: '#64748b',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
+  activeSegmentText: {
+    color: '#ffffff',
   },
 
   statusText: {
@@ -370,67 +456,65 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  sectionTitle: {
-    color: '#0f172a',
-    fontSize: 18,
-    fontWeight: '900',
-    marginTop: 18,
-    marginBottom: 8,
+  loader: {
+    marginVertical: 6,
   },
 
-  listRow: {
-    minHeight: 58,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
+  listContent: {
+    paddingBottom: 18,
   },
 
   chatRow: {
     minHeight: 58,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.24)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+  },
+
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#1f5d86',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
+    marginRight: 10,
+  },
+
+  avatarText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
   },
 
   rowCopy: {
     flex: 1,
-    paddingRight: 10,
+    paddingRight: 8,
   },
 
   rowTitle: {
     color: '#0f172a',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
   },
 
   rowSubtitle: {
-    color: '#64748b',
-    fontSize: 12,
+    color: '#475569',
+    fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
   },
 
-  smallButton: {
-    minWidth: 68,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: '#1f5d86',
+  emptyState: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
+    paddingTop: 64,
   },
 
-  smallButtonText: {
-    color: '#ffffff',
-    fontSize: 12,
+  emptyTitle: {
+    color: '#0f172a',
+    fontSize: 17,
     fontWeight: '900',
   },
 
@@ -438,6 +522,128 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 4,
+    marginTop: 4,
+  },
+
+  groupPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 72,
+  },
+
+  groupPlaceholderTitle: {
+    color: '#0f172a',
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 10,
+  },
+
+  groupPlaceholderText: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.45)',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+
+  modalPanel: {
+    borderRadius: 8,
+    backgroundColor: '#eef2fa',
+    padding: 16,
+  },
+
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+
+  modalTitle: {
+    color: '#0f172a',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+
+  closeButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  friendCodeInput: {
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+  },
+
+  addFriendButton: {
+    height: 42,
+    borderRadius: 8,
+    backgroundColor: '#1f5d86',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+
+  addFriendButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  modalSectionTitle: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+    marginTop: 18,
+    marginBottom: 8,
+  },
+
+  requestRow: {
+    minHeight: 52,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+
+  acceptButton: {
+    minWidth: 66,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#1f5d86',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+
+  acceptButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  modalEmptyText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
