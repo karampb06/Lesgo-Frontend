@@ -84,7 +84,7 @@ export default function TabLayout() {
           name="create"
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name="add-circle-outline" activeName="add-circle-outline" />
+              <TabIcon focused={focused} name="sparkles-outline" activeName="sparkles-outline" />
             ),
           }}
         />

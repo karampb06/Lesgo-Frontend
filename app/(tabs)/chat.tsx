@@ -1,6 +1,7 @@
 import { ENV } from '@/constants/env';
 import { useAuth } from '@/contexts/auth-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -75,6 +76,12 @@ export default function ChatScreen() {
     return () => clearInterval(interval);
   }, [loadMessages]);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      loadMessages();
+    }, [loadMessages])
+  );
+
   const sendMessage = async () => {
     const content = draft.trim();
 
@@ -91,6 +98,7 @@ export default function ChatScreen() {
       });
       setMessages((currentMessages) => [...currentMessages, data.message]);
       setStatusMessage('');
+      loadMessages();
     } catch (error) {
       setDraft(content);
       setStatusMessage(error instanceof Error ? error.message : 'Message could not be sent');

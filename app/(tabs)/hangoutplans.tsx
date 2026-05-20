@@ -1,13 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useHangoutPlans } from '@/contexts/hangout-plans-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HangoutPlansScreen() {
   const router = useRouter();
-  const { plans } = useHangoutPlans();
+  const { plans, refreshPlans } = useHangoutPlans();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshPlans().catch((error) => {
+        console.warn('Could not refresh hangout plans:', error);
+      });
+    }, [refreshPlans])
+  );
 
   const openPlanDetails = (planId: string) => {
     router.push({
@@ -25,10 +35,11 @@ export default function HangoutPlansScreen() {
 
         <Text style={styles.heading}>Upcoming Hangout Plans</Text>
 
-        <View style={styles.planList}>
-          {plans.map((plan) => {
-            const visibleAvatars = plan.avatarUrls.slice(0, 3);
-            const extraCount = Math.max(0, plan.participants.length - visibleAvatars.length);
+        {plans.length ? (
+          <View style={styles.planList}>
+            {plans.map((plan) => {
+            const visibleParticipants = plan.participantProfiles.slice(0, 3);
+            const extraCount = Math.max(0, plan.participants.length - visibleParticipants.length);
 
             return (
               <TouchableOpacity
@@ -54,14 +65,23 @@ export default function HangoutPlansScreen() {
                 </View>
 
                 <View style={styles.avatarStack}>
-                  {visibleAvatars.map((avatar, index) => (
-                    <Image
-                      key={avatar}
-                      source={{ uri: avatar }}
-                      style={[styles.avatar, { marginLeft: index === 0 ? 0 : -12 }]}
-                      contentFit="cover"
-                    />
-                  ))}
+                  {visibleParticipants.map((participant, index) =>
+                    participant.profilePicture ? (
+                      <Image
+                        key={participant.id}
+                        source={{ uri: participant.profilePicture }}
+                        style={[styles.avatar, { marginLeft: index === 0 ? 0 : -12 }]}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View
+                        key={participant.id}
+                        style={[styles.avatar, styles.initialAvatar, { marginLeft: index === 0 ? 0 : -12 }]}
+                      >
+                        <Text style={styles.initialAvatarText}>{getInitials(participant.name)}</Text>
+                      </View>
+                    )
+                  )}
 
                   {extraCount ? (
                     <View style={styles.extraAvatar}>
@@ -71,11 +91,27 @@ export default function HangoutPlansScreen() {
                 </View>
               </TouchableOpacity>
             );
-          })}
-        </View>
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={30} color="#1f5d86" />
+            <Text style={styles.emptyTitle}>No hangout plans yet</Text>
+            <Text style={styles.emptyText}>Create a plan from Suggestions to see it here.</Text>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
+}
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'U';
 }
 
 const styles = StyleSheet.create({
@@ -107,6 +143,31 @@ const styles = StyleSheet.create({
 
   planList: {
     gap: 10,
+  },
+
+  emptyState: {
+    minHeight: 160,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+
+  emptyTitle: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: 10,
+  },
+
+  emptyText: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 4,
   },
 
   planCard: {
@@ -167,6 +228,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ffffff',
     backgroundColor: '#d8dee7',
+  },
+
+  initialAvatar: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1f5d86',
+  },
+
+  initialAvatarText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
   },
 
   extraAvatar: {

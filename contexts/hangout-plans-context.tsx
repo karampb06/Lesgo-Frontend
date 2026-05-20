@@ -1,4 +1,6 @@
-import { createContext, PropsWithChildren, useContext, useMemo, useState } from 'react';
+import { ENV } from '@/constants/env';
+import { useAuth } from '@/contexts/auth-context';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 export type HangoutPlan = {
   id: string;
@@ -8,58 +10,32 @@ export type HangoutPlan = {
   dateTimeLabel: string;
   participants: string[];
   avatarUrls: string[];
+  participantProfiles: PlanParticipant[];
+};
+
+export type PlanParticipant = {
+  id: string;
+  name: string;
+  profilePicture?: string | null;
 };
 
 type NewHangoutPlan = {
+  id?: string;
   title: string;
   location: string;
   scheduledAt: string;
   dateTimeLabel: string;
   participants: string[];
   avatarUrls?: string[];
+  participantProfiles?: PlanParticipant[];
 };
 
 type HangoutPlansContextValue = {
   plans: HangoutPlan[];
   addPlan: (plan: NewHangoutPlan) => HangoutPlan;
+  refreshPlans: () => Promise<void>;
   getPlanById: (planId: string | undefined) => HangoutPlan | undefined;
 };
-
-const DEFAULT_AVATARS = [
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80',
-  'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=100&q=80',
-];
-
-const initialPlans: HangoutPlan[] = [
-  {
-    id: 'coffee-karam',
-    title: 'Coffee with Karam',
-    location: 'Cafe Nero',
-    scheduledAt: '2026-05-13T10:00:00',
-    dateTimeLabel: 'Tomorrow',
-    participants: ['Karam'],
-    avatarUrls: [DEFAULT_AVATARS[0]],
-  },
-  {
-    id: 'bowling-karam',
-    title: 'Bowling with Karam +2',
-    location: 'Timezone',
-    scheduledAt: '2026-05-16T18:00:00',
-    dateTimeLabel: 'Saturday',
-    participants: ['Karam', 'Harsh', 'Kunal'],
-    avatarUrls: DEFAULT_AVATARS,
-  },
-  {
-    id: 'food-festival',
-    title: 'Food Festival 2026',
-    location: 'City Park',
-    scheduledAt: '2026-05-17T12:00:00',
-    dateTimeLabel: 'This weekend',
-    participants: ['Karam', 'Harsh', 'Kunal'],
-    avatarUrls: DEFAULT_AVATARS,
-  },
-];
 
 const HangoutPlansContext = createContext<HangoutPlansContextValue | null>(null);
 
@@ -71,30 +47,93 @@ function sortPlansByUpcomingDate(plans: HangoutPlan[]) {
 }
 
 export function HangoutPlansProvider({ children }: PropsWithChildren) {
-  const [plans, setPlans] = useState(() => sortPlansByUpcomingDate(initialPlans));
+  const { token } = useAuth();
+  const [plans, setPlans] = useState<HangoutPlan[]>([]);
+
+  const refreshPlans = useCallback(async () => {
+    if (!token) {
+      setPlans([]);
+      return;
+    }
+
+    const response = await fetch(`${ENV.API_BASE_URL}/suggestions/plans`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(data?.message ?? data?.error ?? `Plans request failed with status ${response.status}`);
+    }
+
+    const backendPlans: HangoutPlan[] = (data.plans ?? []).map((plan: any) => ({
+      id: plan.id,
+      title: plan.title,
+      location: plan.location ?? plan.place?.name ?? 'Selected place',
+      scheduledAt: plan.scheduledAt ?? plan.startsAt,
+      dateTimeLabel: plan.dateTimeLabel ?? formatPlanLabel(plan.scheduledAt ?? plan.startsAt),
+      participants: plan.participants ?? [],
+      participantProfiles: plan.participantProfiles ?? [],
+      avatarUrls: (plan.participantProfiles ?? [])
+        .map((participant: PlanParticipant) => participant.profilePicture)
+        .filter(Boolean),
+    }));
+
+    setPlans(sortPlansByUpcomingDate(backendPlans));
+  }, [token]);
+
+  useEffect(() => {
+    refreshPlans().catch((error) => {
+      console.warn('Could not load hangout plans:', error);
+    });
+  }, [refreshPlans]);
 
   const value = useMemo<HangoutPlansContextValue>(
     () => ({
       plans,
+      refreshPlans,
       addPlan: (plan) => {
         const createdPlan: HangoutPlan = {
           ...plan,
-          id: `plan-${Date.now()}`,
-          avatarUrls: plan.avatarUrls ?? DEFAULT_AVATARS,
+          id: plan.id ?? `plan-${Date.now()}`,
+          participantProfiles: plan.participantProfiles ?? [],
+          avatarUrls:
+            plan.avatarUrls ??
+            plan.participantProfiles?.flatMap((participant) =>
+              participant.profilePicture ? [participant.profilePicture] : []
+            ) ??
+            [],
         };
 
-        setPlans((currentPlans) => sortPlansByUpcomingDate([...currentPlans, createdPlan]));
+        setPlans((currentPlans) => {
+          const nextPlans = currentPlans.filter((currentPlan) => currentPlan.id !== createdPlan.id);
+
+          return sortPlansByUpcomingDate([...nextPlans, createdPlan]);
+        });
 
         return createdPlan;
       },
       getPlanById: (planId) => plans.find((plan) => plan.id === planId),
     }),
-    [plans]
+    [plans, refreshPlans]
   );
 
   return (
     <HangoutPlansContext.Provider value={value}>{children}</HangoutPlansContext.Provider>
   );
+}
+
+function formatPlanLabel(scheduledAt: string) {
+  if (!scheduledAt) {
+    return 'Upcoming';
+  }
+
+  return new Intl.DateTimeFormat('en-NZ', {
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(scheduledAt));
 }
 
 export function useHangoutPlans() {

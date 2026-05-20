@@ -1,6 +1,7 @@
 import { ENV } from '@/constants/env';
 import { useAuth } from '@/contexts/auth-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -32,6 +33,8 @@ type Friendship = {
 
 type Conversation = {
   id: string;
+  type: 'direct' | 'group';
+  title?: string;
   participants: UserSummary[];
   updatedAt?: string;
 };
@@ -44,6 +47,7 @@ type ChatRow = {
   conversationId?: string;
   friend?: UserSummary;
   updatedAt?: string;
+  type: 'direct' | 'group';
 };
 
 export default function MessagesScreen() {
@@ -51,7 +55,6 @@ export default function MessagesScreen() {
   const { token, user } = useAuth();
   const [friendCode, setFriendCode] = React.useState('');
   const [friends, setFriends] = React.useState<Friendship[]>([]);
-  const [requests, setRequests] = React.useState<Friendship[]>([]);
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [statusMessage, setStatusMessage] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
@@ -86,14 +89,12 @@ export default function MessagesScreen() {
 
     setIsLoading(true);
     try {
-      const [friendsData, requestsData, conversationsData] = await Promise.all([
+      const [friendsData, conversationsData] = await Promise.all([
         apiFetch('/social/friends'),
-        apiFetch('/social/friends/requests'),
         apiFetch('/social/conversations'),
       ]);
 
       setFriends(friendsData.friends ?? []);
-      setRequests(requestsData.requests ?? []);
       setConversations(conversationsData.conversations ?? []);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Could not load chats');
@@ -105,6 +106,12 @@ export default function MessagesScreen() {
   React.useEffect(() => {
     loadSocialData();
   }, [loadSocialData]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSocialData();
+    }, [loadSocialData])
+  );
 
   const sendFriendRequest = async () => {
     if (!friendCode.trim()) {
@@ -122,16 +129,6 @@ export default function MessagesScreen() {
       loadSocialData();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Friend request failed');
-    }
-  };
-
-  const acceptRequest = async (requestId: string) => {
-    try {
-      await apiFetch(`/social/friends/${requestId}/accept`, { method: 'POST' });
-      setStatusMessage('Friend request accepted');
-      loadSocialData();
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : 'Could not accept request');
     }
   };
 
@@ -162,18 +159,29 @@ export default function MessagesScreen() {
 
   const chatRows = React.useMemo(() => {
     const conversationRows: ChatRow[] = conversations.map((conversation) => {
-      const friend = getConversationFriend(conversation);
-      const title = friend?.name ?? 'Chat';
+      const friend = conversation.type === 'direct' ? getConversationFriend(conversation) : undefined;
+      const groupParticipants = conversation.participants
+        .filter((participant) => participant.id !== user?.backendId)
+        .map((participant) => participant.name);
+      const groupParticipantTitle = groupParticipants.join(', ');
+      const title =
+        conversation.type === 'group'
+          ? conversation.title ?? (groupParticipantTitle || 'Hangout group')
+          : friend?.name ?? 'Chat';
 
       return {
         id: `conversation-${conversation.id}`,
         title,
-        subtitle: conversation.updatedAt
-          ? new Date(conversation.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          : 'Tap to continue',
+        subtitle:
+          conversation.type === 'group'
+            ? 'Hangout group chat'
+            : conversation.updatedAt
+              ? new Date(conversation.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Tap to continue',
         initials: getInitials(title),
         conversationId: conversation.id,
         updatedAt: conversation.updatedAt,
+        type: conversation.type,
       };
     });
     const conversationFriendIds = new Set(
@@ -188,15 +196,20 @@ export default function MessagesScreen() {
         subtitle: friend.friendCode ?? 'Start a chat',
         initials: getInitials(friend.name),
         friend,
+        type: 'direct',
       }));
 
-    return [...conversationRows, ...friendRows].sort((first, second) => {
+    const visibleRows = [...conversationRows, ...friendRows].filter((row) =>
+      activeTab === 'groups' ? row.type === 'group' : row.type === 'direct'
+    );
+
+    return visibleRows.sort((first, second) => {
       const firstDate = first.updatedAt ? new Date(first.updatedAt).getTime() : 0;
       const secondDate = second.updatedAt ? new Date(second.updatedAt).getTime() : 0;
 
       return secondDate - firstDate;
     });
-  }, [conversations, friends, getConversationFriend]);
+  }, [activeTab, conversations, friends, getConversationFriend, user?.backendId]);
 
   const openChatRow = (row: ChatRow) => {
     if (row.conversationId) {
@@ -226,11 +239,6 @@ export default function MessagesScreen() {
             activeOpacity={0.85}
           >
             <Ionicons name="add" size={24} color="#ffffff" />
-            {requests.length ? (
-              <View style={styles.requestBadge}>
-                <Text style={styles.requestBadgeText}>{requests.length}</Text>
-              </View>
-            ) : null}
           </TouchableOpacity>
         </View>
 
@@ -259,14 +267,7 @@ export default function MessagesScreen() {
 
         {isLoading ? <ActivityIndicator color="#1f5d86" style={styles.loader} /> : null}
 
-        {activeTab === 'groups' ? (
-          <View style={styles.groupPlaceholder}>
-            <Ionicons name="people" size={30} color="#1f5d86" />
-            <Text style={styles.groupPlaceholderTitle}>Group chats</Text>
-            <Text style={styles.groupPlaceholderText}>Coming soon</Text>
-          </View>
-        ) : (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
             {chatRows.length ? (
               chatRows.map((row) => (
                 <TouchableOpacity
@@ -287,12 +288,17 @@ export default function MessagesScreen() {
               ))
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No chats yet</Text>
-                <Text style={styles.emptyText}>Tap + to add a friend.</Text>
+                <Text style={styles.emptyTitle}>
+                  {activeTab === 'groups' ? 'No group chats yet' : 'No chats yet'}
+                </Text>
+                <Text style={styles.emptyText}>
+                  {activeTab === 'groups'
+                    ? 'Create a hangout plan to start a separate group chat.'
+                    : 'Tap + to add a friend.'}
+                </Text>
               </View>
             )}
-          </ScrollView>
-        )}
+        </ScrollView>
       </View>
 
       <Modal
@@ -326,26 +332,9 @@ export default function MessagesScreen() {
               <Text style={styles.addFriendButtonText}>Send Request</Text>
             </TouchableOpacity>
 
-            <Text style={styles.modalSectionTitle}>Requests</Text>
-            {requests.length ? (
-              requests.map((request) => (
-                <View key={request.id} style={styles.requestRow}>
-                  <View style={styles.rowCopy}>
-                    <Text style={styles.rowTitle}>{request.requester?.name ?? 'Unknown user'}</Text>
-                    <Text style={styles.rowSubtitle}>{request.requester?.friendCode}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.acceptButton}
-                    onPress={() => acceptRequest(request.id)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.acceptButtonText}>Accept</Text>
-                  </TouchableOpacity>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.modalEmptyText}>No pending requests</Text>
-            )}
+            <Text style={styles.modalEmptyText}>
+              Friend requests now appear from the home notification bell.
+            </Text>
           </View>
         </View>
       </Modal>

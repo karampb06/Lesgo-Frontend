@@ -42,7 +42,19 @@ export default function ViewHangoutPlanScreen() {
               </Text>
             </View>
 
-            <Image source={{ uri: plan.avatarUrls[0] }} style={styles.avatar} contentFit="cover" />
+            {plan.participantProfiles[0]?.profilePicture ? (
+              <Image
+                source={{ uri: plan.participantProfiles[0].profilePicture }}
+                style={styles.avatar}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[styles.avatar, styles.initialAvatar]}>
+                <Text style={styles.initialAvatarText}>
+                  {getInitials(plan.participantProfiles[0]?.name ?? plan.participants[0])}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.infoBox}>
@@ -73,6 +85,15 @@ export default function ViewHangoutPlanScreen() {
       </View>
     </SafeAreaView>
   );
+}
+
+function getInitials(name?: string) {
+  return (name ?? 'U')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'U';
 }
 
 function formatPlanDate(scheduledAt: string) {
@@ -150,6 +171,18 @@ const styles = StyleSheet.create({
     height: 62,
     borderRadius: 31,
     backgroundColor: '#d8dee7',
+  },
+
+  initialAvatar: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1f5d86',
+  },
+
+  initialAvatarText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '900',
   },
 
   infoBox: {
