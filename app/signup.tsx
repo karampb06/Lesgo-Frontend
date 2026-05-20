@@ -1,9 +1,12 @@
+import { ENV } from '@/constants/env';
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -20,9 +23,32 @@ export const unstable_settings = {
 
 export default function SignupScreen() {
   const router = useRouter();
+  const [homeArea, setHomeArea] = useState('');
+  const [locationError, setLocationError] = useState('');
 
   const handleLogin = () => {
     router.replace('/login');
+  };
+
+  const prepareSignupProfile = async () => {
+    const trimmedHomeArea = homeArea.trim();
+
+    if (!trimmedHomeArea) {
+      throw new Error('Enter your home area before signing up.');
+    }
+
+    const response = await fetch(
+      `${ENV.API_BASE_URL}/location/geocode?area=${encodeURIComponent(trimmedHomeArea)}`
+    );
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(data?.message ?? 'Could not find that home area.');
+    }
+
+    setLocationError('');
+
+    return data;
   };
 
   return (
@@ -49,11 +75,41 @@ export default function SignupScreen() {
                 Create your LesGo account
               </ThemedText>
 
+              <View style={styles.locationSection}>
+                <ThemedText style={styles.inputLabel}>Home area</ThemedText>
+                <TextInput
+                  value={homeArea}
+                  onChangeText={(value) => {
+                    setHomeArea(value);
+                    setLocationError('');
+                  }}
+                  placeholder="e.g. Auckland CBD"
+                  placeholderTextColor="#8b96a8"
+                  style={styles.input}
+                  autoCapitalize="words"
+                  returnKeyType="done"
+                />
+                <ThemedText style={styles.helpText}>
+                  Use a suburb or area, not your exact address.
+                </ThemedText>
+                {locationError ? <ThemedText style={styles.errorText}>{locationError}</ThemedText> : null}
+              </View>
+
               <GoogleLogin
                 authMode="signup"
                 label="Sign up with Google"
                 style={styles.googleButton}
                 textStyle={styles.googleButtonText}
+                errorStyle={styles.errorText}
+                beforeLogin={async () => {
+                  try {
+                    return await prepareSignupProfile();
+                  } catch (error) {
+                    const message = error instanceof Error ? error.message : 'Could not prepare signup.';
+                    setLocationError(message);
+                    throw error;
+                  }
+                }}
               />
 
               <TouchableOpacity
@@ -138,8 +194,40 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     color: '#64748b',
-    marginBottom: 32,
+    marginBottom: 24,
     textAlign: 'center',
+  },
+
+  locationSection: {
+    width: '100%',
+    marginBottom: 18,
+  },
+
+  inputLabel: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+
+  input: {
+    width: '100%',
+    minHeight: 46,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#d8dee7',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  helpText: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 6,
   },
 
   googleButton: {

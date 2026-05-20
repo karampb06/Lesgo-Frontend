@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "lesgo.app"
     },
     "android": {
       "package": "lesgo.app",
@@ -28,6 +29,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.927905732381-dn4368p04d0gv3h8r5b9to1jkq8ti3r9"
+        }
+      ],
       [
         "expo-splash-screen",
         {

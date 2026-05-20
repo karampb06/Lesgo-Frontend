@@ -1,5 +1,4 @@
 import { useAuth } from '@/contexts/auth-context';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -12,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  NativeModules,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -82,7 +82,11 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     try {
-      await GoogleSignin.signOut();
+      if (NativeModules.RNGoogleSignin) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+        await GoogleSignin.signOut();
+      }
     } catch (error) {
       console.warn('Google logout failed:', error);
     } finally {

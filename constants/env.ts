@@ -1,5 +1,5 @@
 export const ENV = {
-  API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://192.168.88.9:3001',
+  API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://192.168.88.2:3001',
   GOOGLE_ANDROID_CLIENT_ID:
     process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ??
     '927905732381-1r4nlqve9e08dhmsutguospmep7p9da1.apps.googleusercontent.com',

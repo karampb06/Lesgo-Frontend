@@ -1,8 +1,7 @@
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { NativeModules, Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 import { useAuth } from '@/contexts/auth-context';
 import { ENV } from '@/constants/env';
@@ -11,6 +10,18 @@ export const GOOGLE_ANDROID_CLIENT_ID =
   ENV.GOOGLE_ANDROID_CLIENT_ID;
 
 const IS_ANDROID = Platform.OS === 'android';
+const missingNativeModuleMessage =
+  'Google login native module is missing. Rebuild the Android app with npx expo run:android after updating app.json.';
+
+function getGoogleSigninModule() {
+  if (!NativeModules.RNGoogleSignin) {
+    return null;
+  }
+
+  // Use require only after confirming the native module exists. Importing this
+  // package without the native binary crashes during Expo Router route loading.
+  return require('@react-native-google-signin/google-signin').GoogleSignin;
+}
 
 const missingGoogleClientMessage =
   Platform.select({
@@ -30,6 +41,8 @@ export default function GoogleLogin({
   textStyle = null,
   errorStyle = null,
   onSuccessRoute = '/(tabs)/homepage',
+  profile = {},
+  beforeLogin = null,
 }) {
   const router = useRouter();
   const { setSession } = useAuth();
@@ -49,17 +62,42 @@ export default function GoogleLogin({
       return;
     }
 
-    const nativeGoogleConfig = {
-      scopes: googleScopes,
-    };
+    let isMounted = true;
 
-    if (authMode === 'signup') {
-      nativeGoogleConfig.webClientId = ENV.GOOGLE_WEB_CLIENT_ID;
-      nativeGoogleConfig.offlineAccess = true;
-      nativeGoogleConfig.forceCodeForRefreshToken = true;
+    async function configureGoogleSignin() {
+      try {
+        const GoogleSignin = getGoogleSigninModule();
+
+        if (!GoogleSignin) {
+          setGoogleError(missingNativeModuleMessage);
+          return;
+        }
+
+        const nativeGoogleConfig = {
+          scopes: googleScopes,
+        };
+
+        if (authMode === 'signup') {
+          nativeGoogleConfig.webClientId = ENV.GOOGLE_WEB_CLIENT_ID;
+          nativeGoogleConfig.offlineAccess = true;
+          nativeGoogleConfig.forceCodeForRefreshToken = true;
+        }
+
+        GoogleSignin.configure(nativeGoogleConfig);
+      } catch (error) {
+        console.warn('Google Sign-In module is unavailable:', error);
+
+        if (isMounted) {
+          setGoogleError(missingNativeModuleMessage);
+        }
+      }
     }
 
-    GoogleSignin.configure(nativeGoogleConfig);
+    configureGoogleSignin();
+
+    return () => {
+      isMounted = false;
+    };
   }, [authMode, googleScopes]);
 
   const handleGoogleLogin = async () => {
@@ -80,6 +118,14 @@ export default function GoogleLogin({
 
     if (IS_ANDROID) {
       try {
+        const GoogleSignin = getGoogleSigninModule();
+
+        if (!GoogleSignin) {
+          throw new Error(missingNativeModuleMessage);
+        }
+
+        const preparedProfile = beforeLogin ? await beforeLogin() : profile;
+
         await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
         const result = await GoogleSignin.signIn();
@@ -112,9 +158,9 @@ export default function GoogleLogin({
               name: user.name,
               email: user.email,
               profilePicture: user.photo,
-              homeArea: '',
-              homeLat: null,
-              homeLng: null,
+              homeArea: preparedProfile?.homeArea ?? '',
+              homeLat: preparedProfile?.homeLat ?? null,
+              homeLng: preparedProfile?.homeLng ?? null,
             },
           }),
         });
