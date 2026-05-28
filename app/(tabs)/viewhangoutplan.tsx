@@ -2,13 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useHangoutPlans } from '@/contexts/hangout-plans-context';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ViewHangoutPlanScreen() {
   const router = useRouter();
   const { planId } = useLocalSearchParams<{ planId?: string }>();
-  const { plans, getPlanById } = useHangoutPlans();
+  const { plans, getPlanById, cancelPlan } = useHangoutPlans();
+  const [statusMessage, setStatusMessage] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
   const plan = getPlanById(planId) ?? plans[0];
 
   if (!plan) {
@@ -23,6 +26,24 @@ export default function ViewHangoutPlanScreen() {
       </SafeAreaView>
     );
   }
+
+  const handleCancelPlan = async () => {
+    if (!plan?.id || isCancelling) {
+      return;
+    }
+
+    setIsCancelling(true);
+    setStatusMessage('');
+
+    try {
+      await cancelPlan(plan.id);
+      router.replace('/(tabs)/hangoutplans');
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not cancel plan');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -78,8 +99,15 @@ export default function ViewHangoutPlanScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.cancelButton} activeOpacity={0.8}>
-            <Text style={styles.cancelButtonText}>Cancel plan</Text>
+          {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
+
+          <TouchableOpacity
+            style={[styles.cancelButton, isCancelling && styles.disabledButton]}
+            onPress={handleCancelPlan}
+            disabled={isCancelling}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cancelButtonText}>{isCancelling ? 'Cancelling...' : 'Cancel plan'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -229,10 +257,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  disabledButton: {
+    opacity: 0.6,
+  },
+
   cancelButtonText: {
     color: '#ff1f1f',
     fontSize: 16,
     lineHeight: 20,
     fontWeight: '900',
+  },
+
+  statusText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800',
+    marginBottom: 10,
+    textAlign: 'center',
   },
 });

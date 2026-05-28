@@ -7,6 +7,7 @@ export type HangoutPlan = {
   title: string;
   location: string;
   scheduledAt: string;
+  endsAt?: string;
   dateTimeLabel: string;
   participants: string[];
   avatarUrls: string[];
@@ -24,6 +25,7 @@ type NewHangoutPlan = {
   title: string;
   location: string;
   scheduledAt: string;
+  endsAt?: string;
   dateTimeLabel: string;
   participants: string[];
   avatarUrls?: string[];
@@ -33,6 +35,7 @@ type NewHangoutPlan = {
 type HangoutPlansContextValue = {
   plans: HangoutPlan[];
   addPlan: (plan: NewHangoutPlan) => HangoutPlan;
+  cancelPlan: (planId: string) => Promise<void>;
   refreshPlans: () => Promise<void>;
   getPlanById: (planId: string | undefined) => HangoutPlan | undefined;
 };
@@ -40,10 +43,17 @@ type HangoutPlansContextValue = {
 const HangoutPlansContext = createContext<HangoutPlansContextValue | null>(null);
 
 function sortPlansByUpcomingDate(plans: HangoutPlan[]) {
-  return [...plans].sort(
-    (first, second) =>
-      new Date(first.scheduledAt).getTime() - new Date(second.scheduledAt).getTime()
-  );
+  const now = Date.now();
+
+  return [...plans]
+    .filter((plan) => {
+      const expiresAt = new Date(plan.endsAt ?? plan.scheduledAt).getTime();
+      return Number.isFinite(expiresAt) ? expiresAt > now : true;
+    })
+    .sort(
+      (first, second) =>
+        new Date(first.scheduledAt).getTime() - new Date(second.scheduledAt).getTime()
+    );
 }
 
 export function HangoutPlansProvider({ children }: PropsWithChildren) {
@@ -72,6 +82,7 @@ export function HangoutPlansProvider({ children }: PropsWithChildren) {
       title: plan.title,
       location: plan.location ?? plan.place?.name ?? 'Selected place',
       scheduledAt: plan.scheduledAt ?? plan.startsAt,
+      endsAt: plan.endsAt,
       dateTimeLabel: plan.dateTimeLabel ?? formatPlanLabel(plan.scheduledAt ?? plan.startsAt),
       participants: plan.participants ?? [],
       participantProfiles: plan.participantProfiles ?? [],
@@ -93,6 +104,26 @@ export function HangoutPlansProvider({ children }: PropsWithChildren) {
     () => ({
       plans,
       refreshPlans,
+      cancelPlan: async (planId) => {
+        if (!token) {
+          throw new Error('You must be signed in to cancel a plan.');
+        }
+
+        const response = await fetch(`${ENV.API_BASE_URL}/suggestions/plans/${planId}/cancel`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(data?.message ?? data?.error ?? `Cancel request failed with status ${response.status}`);
+        }
+
+        setPlans((currentPlans) => currentPlans.filter((plan) => plan.id !== planId));
+      },
       addPlan: (plan) => {
         const createdPlan: HangoutPlan = {
           ...plan,
@@ -116,7 +147,7 @@ export function HangoutPlansProvider({ children }: PropsWithChildren) {
       },
       getPlanById: (planId) => plans.find((plan) => plan.id === planId),
     }),
-    [plans, refreshPlans]
+    [plans, refreshPlans, token]
   );
 
   return (
