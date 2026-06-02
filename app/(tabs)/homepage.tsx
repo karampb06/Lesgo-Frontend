@@ -35,29 +35,6 @@ type TrendingPlace = {
   websiteUri?: string;
 };
 
-type GooglePlace = {
-  id?: string;
-  displayName?: {
-    text?: string;
-  };
-  primaryTypeDisplayName?: {
-    text?: string;
-  };
-  types?: string[];
-  photos?: {
-    name?: string;
-  }[];
-  formattedAddress?: string;
-  rating?: number;
-  googleMapsUri?: string;
-  nationalPhoneNumber?: string;
-  websiteUri?: string;
-  location?: {
-    latitude?: number;
-    longitude?: number;
-  };
-};
-
 type Friend = {
   id: string;
   name: string;
@@ -138,128 +115,29 @@ export default function HomePage() {
   );
 
   const loadTrendingPlaces = React.useCallback(async () => {
-    if (!ENV.GOOGLE_MAPS_API_KEY) {
-      setTrendingPlaces([]);
-      setTrendingPlacesMessage('Add a Google Maps API key to load places.');
-      return;
-    }
-
     setIsLoadingTrendingPlaces(true);
     setTrendingPlacesMessage('');
 
     try {
-      const hasHomeCoordinates =
+      const params = new URLSearchParams();
+
+      if (
         typeof homeLat === 'number' &&
         Number.isFinite(homeLat) &&
         typeof homeLng === 'number' &&
-        Number.isFinite(homeLng);
-      const trimmedHomeArea = homeArea?.trim();
-      const buildNearbyRequest = (includedTypes: string[]) => ({
-        url: 'https://places.googleapis.com/v1/places:searchNearby',
-        body: {
-          includedTypes,
-          maxResultCount: 10,
-          rankPreference: 'POPULARITY',
-          languageCode: 'en',
-          regionCode: 'NZ',
-          locationRestriction: {
-            circle: {
-              center: {
-                latitude: homeLat,
-                longitude: homeLng,
-              },
-              radius: 8000,
-            },
-          },
-        },
-      });
-      const foodRequest = hasHomeCoordinates
-        ? {
-            ...buildNearbyRequest(['restaurant', 'cafe']),
-            category: 'food' as const,
-          }
-        : {
-            url: 'https://places.googleapis.com/v1/places:searchText',
-            body: {
-              textQuery: trimmedHomeArea
-                ? `popular restaurants and cafes near ${trimmedHomeArea}`
-                : 'popular restaurants and cafes near me',
-              maxResultCount: 10,
-              languageCode: 'en',
-              regionCode: 'NZ',
-            },
-            category: 'food' as const,
-          };
-      const activityRequest = hasHomeCoordinates
-        ? {
-            ...buildNearbyRequest(['park', 'zoo', 'shopping_mall', 'tourist_attraction']),
-            category: 'activity' as const,
-          }
-        : {
-            url: 'https://places.googleapis.com/v1/places:searchText',
-            body: {
-              textQuery: trimmedHomeArea
-                ? `popular parks zoos malls and attractions near ${trimmedHomeArea}`
-                : 'popular parks zoos malls and attractions near me',
-              maxResultCount: 10,
-              languageCode: 'en',
-              regionCode: 'NZ',
-            },
-            category: 'activity' as const,
-          };
+        Number.isFinite(homeLng)
+      ) {
+        params.set('lat', String(homeLat));
+        params.set('lng', String(homeLng));
+      }
 
-      const fetchPlaces = async (request: typeof foodRequest | typeof activityRequest): Promise<TrendingPlace[]> => {
-        const response = await fetch(request.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': ENV.GOOGLE_MAPS_API_KEY,
-            'X-Goog-FieldMask': [
-              'places.id',
-              'places.displayName',
-              'places.primaryTypeDisplayName',
-              'places.types',
-              'places.photos',
-              'places.formattedAddress',
-              'places.rating',
-              'places.googleMapsUri',
-              'places.location',
-            ].join(','),
-          },
-          body: JSON.stringify(request.body),
-        });
-        const data = await response.json().catch(() => null);
+      if (homeArea?.trim()) {
+        params.set('homeArea', homeArea.trim());
+      }
 
-        if (!response.ok) {
-          throw new Error(data?.error?.message ?? `Places request failed with status ${response.status}`);
-        }
-
-        const places: TrendingPlace[] = (data?.places ?? []).map((place: GooglePlace, index: number) => {
-          const photoName = place.photos?.[0]?.name;
-
-          return {
-            id: place.id ?? `place-${index}`,
-            name: place.displayName?.text ?? 'Nearby place',
-            type: place.primaryTypeDisplayName?.text ?? formatPlaceType(place.types?.[0]),
-            category: request.category,
-            lat: place.location?.latitude,
-            lng: place.location?.longitude,
-            address: place.formattedAddress,
-            rating: place.rating,
-            mapsUri: place.googleMapsUri,
-            image: photoName
-              ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=240&key=${ENV.GOOGLE_MAPS_API_KEY}`
-              : undefined,
-          };
-        });
-
-        return shufflePlaces(places).slice(0, 5);
-      };
-
-      const [foodPlaces, nearbyActivityPlaces] = await Promise.all([
-        fetchPlaces(foodRequest),
-        fetchPlaces(activityRequest),
-      ]);
+      const data = await apiFetch(`/places/trending?${params.toString()}`);
+      const foodPlaces = data.foodPlaces ?? [];
+      const nearbyActivityPlaces = data.activityPlaces ?? [];
 
       setTrendingPlaces(foodPlaces);
       setActivityPlaces(nearbyActivityPlaces);
@@ -275,7 +153,7 @@ export default function HomePage() {
     } finally {
       setIsLoadingTrendingPlaces(false);
     }
-  }, [homeArea, homeLat, homeLng]);
+  }, [apiFetch, homeArea, homeLat, homeLng]);
 
   const openTrendingPlace = async (place: TrendingPlace) => {
     setSelectedPlace(place);
@@ -283,53 +161,23 @@ export default function HomePage() {
     setPlaceDetailsMessage('');
     setAddPlaceMessage('');
 
-    if (!ENV.GOOGLE_MAPS_API_KEY || !place.id) {
+    if (!place.id) {
       return;
     }
 
     setIsLoadingPlaceDetails(true);
 
     try {
-      const response = await fetch(`https://places.googleapis.com/v1/places/${place.id}`, {
-        headers: {
-          'X-Goog-Api-Key': ENV.GOOGLE_MAPS_API_KEY,
-          'X-Goog-FieldMask': [
-            'id',
-            'displayName',
-            'primaryTypeDisplayName',
-            'types',
-            'photos',
-            'formattedAddress',
-            'rating',
-            'googleMapsUri',
-            'nationalPhoneNumber',
-            'websiteUri',
-            'location',
-          ].join(','),
-        },
-      });
-      const data: GooglePlace | null = await response.json().catch(() => null);
+      const data = await apiFetch(`/places/${place.id}`);
+      const placeDetails = data.place ?? data;
 
-      if (!response.ok) {
-        throw new Error((data as any)?.error?.message ?? `Place details failed with status ${response.status}`);
-      }
-
-      const photoName = data?.photos?.[0]?.name;
       setSelectedPlace({
-        id: data?.id ?? place.id,
-        name: data?.displayName?.text ?? place.name,
-        type: data?.primaryTypeDisplayName?.text ?? place.type,
-        category: place.category,
-        lat: data?.location?.latitude ?? place.lat,
-        lng: data?.location?.longitude ?? place.lng,
-        address: data?.formattedAddress ?? place.address,
-        rating: data?.rating ?? place.rating,
-        mapsUri: data?.googleMapsUri ?? place.mapsUri,
-        phoneNumber: data?.nationalPhoneNumber,
-        websiteUri: data?.websiteUri,
-        image: photoName
-          ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=720&key=${ENV.GOOGLE_MAPS_API_KEY}`
-          : place.image,
+        ...place,
+        ...placeDetails,
+        id: placeDetails?.id ?? place.id,
+        name: placeDetails?.name ?? place.name,
+        type: placeDetails?.type ?? place.type,
+        category: placeDetails?.category ?? place.category,
       });
     } catch (error) {
       console.warn('Place details load failed:', error);
@@ -1016,17 +864,6 @@ function getPlanDistanceLabel(scheduledAt: string) {
   return weekDifference === 1 ? '1 Week' : `${weekDifference} Weeks`;
 }
 
-function formatPlaceType(type?: string) {
-  if (!type) {
-    return 'Place';
-  }
-
-  return type
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
 function getDefaultPlanDate() {
   const date = new Date();
   date.setDate(date.getDate() + 1);
@@ -1143,10 +980,6 @@ function normalizePlanInvites(data: any): PlanInvite[] {
       };
     })
     .filter(Boolean) as PlanInvite[];
-}
-
-function shufflePlaces<T>(places: T[]) {
-  return [...places].sort(() => Math.random() - 0.5);
 }
 
 const styles = StyleSheet.create({
