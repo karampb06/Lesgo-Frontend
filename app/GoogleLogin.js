@@ -185,6 +185,9 @@ export default function GoogleLogin({
           picture: savedUser?.profilePicture ?? user.photo,
           contactNumber: savedUser?.contactNumber ?? '',
           friendCode: savedUser?.friendCode,
+          homeArea: savedUser?.homeArea ?? preparedProfile?.homeArea ?? '',
+          homeLat: savedUser?.homeLat ?? preparedProfile?.homeLat ?? null,
+          homeLng: savedUser?.homeLng ?? preparedProfile?.homeLng ?? null,
         }, jwtToken);
 
         console.log(

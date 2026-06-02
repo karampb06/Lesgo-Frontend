@@ -181,7 +181,7 @@ export default function SuggestionsScreen() {
       const createdPlan = data.plan;
 
       addPlan({
-        id: createdPlan?.id,
+        id: createdPlan?.id ?? createdPlan?._id,
         title: createdPlan?.title ?? title,
         location: createdPlan?.location ?? suggestion.place.name,
         scheduledAt: createdPlan?.scheduledAt ?? suggestion.time.start,

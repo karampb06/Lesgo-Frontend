@@ -1,18 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useHangoutPlans } from '@/contexts/hangout-plans-context';
+import { useAuth } from '@/contexts/auth-context';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ViewHangoutPlanScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { planId } = useLocalSearchParams<{ planId?: string }>();
-  const { plans, getPlanById, cancelPlan } = useHangoutPlans();
+  const { plans, getPlanById, cancelPlan, refreshPlans } = useHangoutPlans();
   const [statusMessage, setStatusMessage] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
   const plan = getPlanById(planId) ?? plans[0];
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPlans().catch((error) => {
+        console.warn('Could not refresh plan details:', error);
+      });
+    }, [refreshPlans])
+  );
 
   if (!plan) {
     return (
@@ -37,6 +48,7 @@ export default function ViewHangoutPlanScreen() {
 
     try {
       await cancelPlan(plan.id);
+      Alert.alert('Plan Cancelled', 'This hangout plan has been cancelled.');
       router.replace('/(tabs)/hangoutplans');
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Could not cancel plan');
@@ -99,6 +111,34 @@ export default function ViewHangoutPlanScreen() {
             </View>
           </View>
 
+          <Text style={styles.statusHeading}>Invite Status</Text>
+          <View style={styles.inviteStatusList}>
+            {getInviteStatuses(plan, user).map((participant) => (
+              <View key={participant.id} style={styles.inviteStatusRow}>
+                <Text style={styles.inviteStatusName}>{participant.name}</Text>
+                <View
+                  style={[
+                    styles.inviteStatusBadge,
+                    participant.status === 'accepted'
+                      ? styles.acceptedStatusBadge
+                      : styles.pendingStatusBadge,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.inviteStatusText,
+                      participant.status === 'accepted'
+                        ? styles.acceptedStatusText
+                        : styles.pendingStatusText,
+                    ]}
+                  >
+                    {formatInviteStatus(participant.status)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
           {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
 
           <TouchableOpacity
@@ -130,6 +170,72 @@ function formatPlanDate(scheduledAt: string) {
     month: 'long',
     year: 'numeric',
   }).format(new Date(scheduledAt));
+}
+
+function getInviteStatuses(plan: {
+  participants: string[];
+  participantProfiles: { id: string; name: string; status?: string }[];
+  inviteStatuses?: { id: string; name: string; status?: string }[];
+}, user?: { backendId?: string; id: string; name: string } | null) {
+  const acceptedNames = new Set(plan.participants.map((name) => normalizeName(name)));
+  const statuses = new Map<string, { id: string; name: string; status: string }>();
+
+  plan.inviteStatuses?.forEach((participant) => {
+    statuses.set(participant.id, {
+      id: participant.id,
+      name: participant.name,
+      status: normalizeInviteStatus(participant.status),
+    });
+  });
+
+  plan.participantProfiles.forEach((participant) => {
+    const isCurrentUser =
+      participant.id === user?.backendId ||
+      participant.id === user?.id ||
+      normalizeName(participant.name) === normalizeName(user?.name);
+    const isAccepted = isCurrentUser || acceptedNames.has(normalizeName(participant.name));
+
+    statuses.set(participant.id, {
+      id: participant.id,
+      name: participant.name,
+      status: isAccepted ? 'accepted' : normalizeInviteStatus(participant.status),
+    });
+  });
+
+  plan.participants.forEach((name) => {
+    const matchingParticipant = [...statuses.values()].find(
+      (participant) => normalizeName(participant.name) === normalizeName(name)
+    );
+
+    if (matchingParticipant) {
+      statuses.set(matchingParticipant.id, {
+        ...matchingParticipant,
+        status: 'accepted',
+      });
+      return;
+    }
+
+    statuses.set(name, {
+      id: name,
+      name,
+      status: 'accepted',
+    });
+  });
+
+  return [...statuses.values()];
+}
+
+function normalizeInviteStatus(status?: string) {
+  const normalizedStatus = status?.toLowerCase();
+  return ['accepted', 'joined', 'confirmed'].includes(normalizedStatus ?? '') ? 'accepted' : 'pending';
+}
+
+function formatInviteStatus(status?: string) {
+  return normalizeInviteStatus(status) === 'accepted' ? 'Accepted' : 'Pending';
+}
+
+function normalizeName(name?: string) {
+  return (name ?? '').trim().toLowerCase();
 }
 
 const styles = StyleSheet.create({
@@ -255,6 +361,66 @@ const styles = StyleSheet.create({
     borderColor: '#ff3b30',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  statusHeading: {
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+
+  inviteStatusList: {
+    gap: 8,
+    marginBottom: 18,
+  },
+
+  inviteStatusRow: {
+    minHeight: 36,
+    borderRadius: 8,
+    backgroundColor: '#eef2fa',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+
+  inviteStatusName: {
+    flex: 1,
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '900',
+    paddingRight: 8,
+  },
+
+  inviteStatusBadge: {
+    minWidth: 72,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+
+  acceptedStatusBadge: {
+    backgroundColor: '#dcfce7',
+  },
+
+  pendingStatusBadge: {
+    backgroundColor: '#fef3c7',
+  },
+
+  inviteStatusText: {
+    fontSize: 10,
+    fontWeight: '900',
+  },
+
+  acceptedStatusText: {
+    color: '#15803d',
+  },
+
+  pendingStatusText: {
+    color: '#b45309',
   },
 
   disabledButton: {

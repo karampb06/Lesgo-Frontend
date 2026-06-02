@@ -8,6 +8,9 @@ export type AuthUser = {
   friendCode?: string;
   picture?: string | null;
   contactNumber?: string;
+  homeArea?: string;
+  homeLat?: number | null;
+  homeLng?: number | null;
 };
 
 type AuthContextValue = {

@@ -72,6 +72,9 @@ export default function ProfileScreen() {
         picture: savedUser.profilePicture ?? user.picture,
         contactNumber: savedUser.contactNumber ?? profileUpdate.contactNumber,
         friendCode: savedUser.friendCode ?? user.friendCode,
+        homeArea: savedUser.homeArea ?? user.homeArea,
+        homeLat: savedUser.homeLat ?? user.homeLat,
+        homeLng: savedUser.homeLng ?? user.homeLng,
       });
       setStatusMessage('Profile updated');
     } catch (error) {
