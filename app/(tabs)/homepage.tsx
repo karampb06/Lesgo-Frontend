@@ -73,6 +73,7 @@ export default function HomePage() {
   const [planInvites, setPlanInvites] = React.useState<PlanInvite[]>([]);
   const [trendingPlaces, setTrendingPlaces] = React.useState<TrendingPlace[]>([]);
   const [activityPlaces, setActivityPlaces] = React.useState<TrendingPlace[]>([]);
+  const [activeTrendingSection, setActiveTrendingSection] = React.useState<'places' | 'activities' | null>(null);
   const [isLoadingTrendingPlaces, setIsLoadingTrendingPlaces] = React.useState(false);
   const [trendingPlacesMessage, setTrendingPlacesMessage] = React.useState('');
   const [selectedPlace, setSelectedPlace] = React.useState<TrendingPlace | null>(null);
@@ -85,6 +86,8 @@ export default function HomePage() {
   const [planTime, setPlanTime] = React.useState(() => formatInputTime(getDefaultPlanDate()));
   const [durationMinutes, setDurationMinutes] = React.useState(120);
   const [isCalendarVisible, setIsCalendarVisible] = React.useState(false);
+  const [isTimePickerVisible, setIsTimePickerVisible] = React.useState(false);
+  const [timePickerMode, setTimePickerMode] = React.useState<'hour' | 'minute'>('hour');
   const [calendarMonth, setCalendarMonth] = React.useState(() => getDefaultPlanDate());
   const [isLoadingFriends, setIsLoadingFriends] = React.useState(false);
   const [isCreatingPlacePlan, setIsCreatingPlacePlan] = React.useState(false);
@@ -438,66 +441,151 @@ export default function HomePage() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitle}>Trending Places</Text>
-
-        <View style={styles.placeRow}>
-          {isLoadingTrendingPlaces ? (
-            <View style={styles.trendingStatusCard}>
-              <ActivityIndicator color="#1f5d86" />
+        <View style={styles.trendingHeader}>
+          <View style={styles.trendingTitleRow}>
+            <View>
+              <Text style={styles.sectionTitle}>
+                {activeTrendingSection === 'places'
+                  ? 'Trending Places'
+                  : activeTrendingSection === 'activities'
+                    ? 'Trending Activities'
+                    : 'Explore Trending'}
+              </Text>
+              <Text style={styles.trendingSubtitle}>Fresh picks for your next hangout</Text>
             </View>
-          ) : trendingPlaces.length ? trendingPlaces.map((place) => (
+            {activeTrendingSection ? (
+              <TouchableOpacity
+                style={styles.trendingBackButton}
+                onPress={() => setActiveTrendingSection(null)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="chevron-back" size={18} color="#1f5d86" />
+                <Text style={styles.trendingBackText}>Back</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.trendingSpark}>
+                <Ionicons name="sparkles-outline" size={22} color="#ffffff" />
+              </View>
+            )}
+          </View>
+
+          <View style={styles.trendingToggle}>
             <TouchableOpacity
-              key={place.id}
-              style={styles.placeCard}
-              onPress={() => openTrendingPlace(place)}
+              style={[
+                styles.trendingToggleButton,
+                activeTrendingSection === 'places' && styles.activeTrendingToggleButton,
+              ]}
+              onPress={() => setActiveTrendingSection('places')}
               activeOpacity={0.85}
             >
-              {place.image ? (
-                <Image source={{ uri: place.image }} style={styles.placeImage} contentFit="cover" />
-              ) : (
-                <View style={styles.placeImageFallback}>
-                  <Ionicons name="location-outline" size={24} color="#1f5d86" />
-                </View>
-              )}
-              <View style={styles.placeCaption}>
-                <Text style={styles.placeName} numberOfLines={1}>{place.name}</Text>
-                <Text style={styles.placeType}>{place.type}</Text>
+              <View style={styles.trendingToggleLabel}>
+                <Ionicons
+                  name="restaurant-outline"
+                  size={16}
+                  color={activeTrendingSection === 'places' ? '#ffffff' : '#1f5d86'}
+                />
+                <Text
+                  style={[
+                    styles.trendingToggleText,
+                    activeTrendingSection === 'places' && styles.activeTrendingToggleText,
+                  ]}
+                >
+                  Places
+                </Text>
               </View>
             </TouchableOpacity>
-          )) : (
-            <View style={styles.trendingStatusCard}>
-              <Text style={styles.trendingStatusText}>{trendingPlacesMessage}</Text>
-            </View>
-          )}
+            <TouchableOpacity
+              style={[
+                styles.trendingToggleButton,
+                activeTrendingSection === 'activities' && styles.activeTrendingToggleButton,
+              ]}
+              onPress={() => setActiveTrendingSection('activities')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.trendingToggleLabel}>
+                <Ionicons
+                  name="map-outline"
+                  size={16}
+                  color={activeTrendingSection === 'activities' ? '#ffffff' : '#1f5d86'}
+                />
+                <Text
+                  style={[
+                    styles.trendingToggleText,
+                    activeTrendingSection === 'activities' && styles.activeTrendingToggleText,
+                  ]}
+                >
+                  Activities
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {activityPlaces.length ? (
-          <>
-            <Text style={styles.sectionTitle}>Trending Activities</Text>
-            <View style={styles.placeRow}>
-              {activityPlaces.map((place) => (
-                <TouchableOpacity
-                  key={place.id}
-                  style={styles.placeCard}
-                  onPress={() => openTrendingPlace(place)}
-                  activeOpacity={0.85}
-                >
-                  {place.image ? (
-                    <Image source={{ uri: place.image }} style={styles.placeImage} contentFit="cover" />
-                  ) : (
-                    <View style={styles.placeImageFallback}>
-                      <Ionicons name="location-outline" size={24} color="#1f5d86" />
-                    </View>
-                  )}
-                  <View style={styles.placeCaption}>
-                    <Text style={styles.placeName} numberOfLines={1}>{place.name}</Text>
-                    <Text style={styles.placeType}>{place.type}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+        {!activeTrendingSection ? (
+          <View style={styles.discoveryCard}>
+            <View style={styles.discoveryIconCluster}>
+              <View style={[styles.discoveryIcon, styles.discoveryIconPrimary]}>
+                <Ionicons name="restaurant-outline" size={22} color="#ffffff" />
+              </View>
+              <View style={[styles.discoveryIcon, styles.discoveryIconSecondary]}>
+                <Ionicons name="map-outline" size={22} color="#ffffff" />
+              </View>
+              <View style={[styles.discoveryIcon, styles.discoveryIconAccent]}>
+                <Ionicons name="location-outline" size={20} color="#ffffff" />
+              </View>
             </View>
-          </>
-        ) : null}
+            <Text style={styles.discoveryTitle}>What kind of vibe today?</Text>
+            <Text style={styles.discoveryText}>
+              Pick a lane to reveal nearby ideas with photos, details, and plan invites.
+            </Text>
+            <View style={styles.discoveryStatsRow}>
+              <View style={styles.discoveryStat}>
+                <Ionicons name="restaurant-outline" size={22} color="#1f5d86" />
+                <Text style={styles.discoveryStatLabel}>Places</Text>
+              </View>
+              <View style={styles.discoveryDivider} />
+              <View style={styles.discoveryStat}>
+                <Ionicons name="map-outline" size={22} color="#1f5d86" />
+                <Text style={styles.discoveryStatLabel}>Activities</Text>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.placeRow}>
+            {isLoadingTrendingPlaces ? (
+              <View style={styles.trendingStatusCard}>
+                <ActivityIndicator color="#1f5d86" />
+              </View>
+            ) : (activeTrendingSection === 'places' ? trendingPlaces : activityPlaces).length ? (
+              (activeTrendingSection === 'places' ? trendingPlaces : activityPlaces).map((place) => (
+              <TouchableOpacity
+                key={place.id}
+                style={styles.placeCard}
+                onPress={() => openTrendingPlace(place)}
+                activeOpacity={0.85}
+              >
+                {place.image ? (
+                  <Image source={{ uri: place.image }} style={styles.placeImage} contentFit="cover" />
+                ) : (
+                  <View style={styles.placeImageFallback}>
+                    <Ionicons name="location-outline" size={24} color="#1f5d86" />
+                  </View>
+                )}
+                <View style={styles.placeCaption}>
+                  <Text style={styles.placeName} numberOfLines={1}>{place.name}</Text>
+                  <Text style={styles.placeType} numberOfLines={2}>{place.type}</Text>
+                </View>
+              </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.trendingStatusCard}>
+                <Text style={styles.trendingStatusText}>
+                  {trendingPlacesMessage || `No trending ${activeTrendingSection} found right now.`}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming Plans</Text>
@@ -711,13 +799,17 @@ export default function HomePage() {
                 >
                   <Text style={styles.planInputText}>{planDate}</Text>
                 </TouchableOpacity>
-                <TextInput
-                  value={planTime}
-                  onChangeText={setPlanTime}
-                  placeholder="HH:mm"
-                  placeholderTextColor="#64748b"
+                <TouchableOpacity
                   style={styles.timeInput}
-                />
+                  onPress={() => {
+                    setTimePickerMode('hour');
+                    setIsTimePickerVisible(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="time-outline" size={15} color="#1f5d86" />
+                  <Text style={styles.planInputText}>{formatTimeDisplay(planTime)}</Text>
+                </TouchableOpacity>
               </View>
               <View style={styles.durationRow}>
                 {[60, 90, 120, 180].map((duration) => (
@@ -839,6 +931,96 @@ export default function HomePage() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={isTimePickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsTimePickerVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.timePickerPanel}>
+            <View style={styles.timePickerHeader}>
+              <Ionicons name="time-outline" size={20} color="#1f5d86" />
+              <Text style={styles.calendarTitle}>Select Time</Text>
+              <TouchableOpacity
+                style={styles.calendarNavButton}
+                onPress={() => setIsTimePickerVisible(false)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="close" size={20} color="#0f172a" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.selectedTimeDisplay}>
+              <TouchableOpacity
+                style={[styles.timeModeButton, timePickerMode === 'hour' && styles.activeTimeModeButton]}
+                onPress={() => setTimePickerMode('hour')}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.timeModeText, timePickerMode === 'hour' && styles.activeTimeModeText]}>
+                  {formatTimeParts(planTime).hourLabel}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.timeSeparator}>:</Text>
+              <TouchableOpacity
+                style={[styles.timeModeButton, timePickerMode === 'minute' && styles.activeTimeModeButton]}
+                onPress={() => setTimePickerMode('minute')}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.timeModeText, timePickerMode === 'minute' && styles.activeTimeModeText]}>
+                  {formatTimeParts(planTime).minuteLabel}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.periodToggle}
+                onPress={() => setPlanTime(toggleTimePeriod(planTime))}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.periodToggleText}>{formatTimeParts(planTime).period}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.clockFace}>
+              <View style={styles.clockCenter} />
+              {(timePickerMode === 'hour' ? getClockHours() : getClockMinutes()).map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.clockOption,
+                    option.position,
+                    option.value === getSelectedClockValue(planTime, timePickerMode) && styles.selectedClockOption,
+                  ]}
+                  onPress={() => {
+                    setPlanTime(updatePlanTimePart(planTime, timePickerMode, option.value));
+                    if (timePickerMode === 'hour') {
+                      setTimePickerMode('minute');
+                    }
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.clockOptionText,
+                      option.value === getSelectedClockValue(planTime, timePickerMode) && styles.selectedClockOptionText,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.timeDoneButton}
+              onPress={() => setIsTimePickerVisible(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.timeDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -889,6 +1071,100 @@ function formatInputDate(date: Date) {
 
 function formatInputTime(date: Date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatTimeDisplay(time: string) {
+  const [hourText, minuteText] = time.split(':');
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return time;
+  }
+
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${period}`;
+}
+
+function formatTimeParts(time: string) {
+  const [hourText, minuteText] = time.split(':');
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+
+  return {
+    hourLabel: String(displayHour).padStart(2, '0'),
+    minuteLabel: String(Number.isFinite(minute) ? minute : 0).padStart(2, '0'),
+    period,
+  };
+}
+
+function getClockHours() {
+  return Array.from({ length: 12 }, (_, index) => {
+    const value = index + 1;
+    return {
+      value,
+      label: String(value),
+      position: getClockOptionPosition(index, 12),
+    };
+  });
+}
+
+function getClockMinutes() {
+  return [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((value, index) => ({
+    value,
+    label: String(value).padStart(2, '0'),
+    position: getClockOptionPosition(index, 12),
+  }));
+}
+
+function getClockOptionPosition(index: number, count: number) {
+  const clockSize = 220;
+  const optionSize = 42;
+  const radius = 84;
+  const angle = (index / count) * 2 * Math.PI - Math.PI / 2;
+  const center = clockSize / 2 - optionSize / 2;
+
+  return {
+    left: center + radius * Math.cos(angle),
+    top: center + radius * Math.sin(angle),
+  };
+}
+
+function getSelectedClockValue(time: string, mode: 'hour' | 'minute') {
+  const [hourText, minuteText] = time.split(':');
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (mode === 'hour') {
+    return hour % 12 || 12;
+  }
+
+  return Math.round((Number.isFinite(minute) ? minute : 0) / 5) * 5;
+}
+
+function updatePlanTimePart(time: string, mode: 'hour' | 'minute', value: number) {
+  const [hourText, minuteText] = time.split(':');
+  const currentHour = Number(hourText);
+  const currentMinute = Number(minuteText);
+
+  if (mode === 'minute') {
+    return `${String(Number.isFinite(currentHour) ? currentHour : 18).padStart(2, '0')}:${String(value).padStart(2, '0')}`;
+  }
+
+  const isPm = (Number.isFinite(currentHour) ? currentHour : 18) >= 12;
+  const hour24 = isPm ? (value === 12 ? 12 : value + 12) : (value === 12 ? 0 : value);
+  return `${String(hour24).padStart(2, '0')}:${String(Number.isFinite(currentMinute) ? currentMinute : 0).padStart(2, '0')}`;
+}
+
+function toggleTimePeriod(time: string) {
+  const [hourText, minuteText] = time.split(':');
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const nextHour = ((Number.isFinite(hour) ? hour : 18) + 12) % 24;
+  return `${String(nextHour).padStart(2, '0')}:${String(Number.isFinite(minute) ? minute : 0).padStart(2, '0')}`;
 }
 
 function startOfToday() {
@@ -1057,17 +1333,188 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  trendingHeader: {
+    gap: 10,
+  },
+
+  trendingTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  trendingSubtitle: {
+    color: '#475569',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+
+  trendingSpark: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#0f766e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  trendingBackButton: {
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d7e0ec',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingLeft: 10,
+    paddingRight: 14,
+  },
+
+  trendingBackText: {
+    color: '#1f5d86',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  trendingToggle: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  trendingToggleButton: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 16,
+    backgroundColor: '#eef2fa',
+    borderWidth: 1,
+    borderColor: '#d7e0ec',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+  },
+
+  activeTrendingToggleButton: {
+    backgroundColor: '#1f5d86',
+    borderColor: '#1f5d86',
+  },
+
+  trendingToggleLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  trendingToggleText: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  activeTrendingToggleText: {
+    color: '#ffffff',
+  },
+
+  discoveryCard: {
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    padding: 16,
+    marginTop: 12,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#dbe3ee',
+  },
+
+  discoveryIconCluster: {
+    height: 54,
+    marginBottom: 12,
+  },
+
+  discoveryIcon: {
+    position: 'absolute',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+  },
+
+  discoveryIconPrimary: {
+    left: 0,
+    backgroundColor: '#1f5d86',
+  },
+
+  discoveryIconSecondary: {
+    left: 34,
+    backgroundColor: '#0f766e',
+  },
+
+  discoveryIconAccent: {
+    left: 68,
+    backgroundColor: '#7c3aed',
+  },
+
+  discoveryTitle: {
+    color: '#0f172a',
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '900',
+    marginBottom: 5,
+  },
+
+  discoveryText: {
+    color: '#475569',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+
+  discoveryStatsRow: {
+    height: 54,
+    borderRadius: 10,
+    backgroundColor: '#eef2fa',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+  },
+
+  discoveryStat: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  discoveryStatLabel: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 1,
+  },
+
+  discoveryDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#cbd5e1',
+  },
+
   placeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 18,
+    justifyContent: 'space-between',
+    rowGap: 20,
     marginTop: 12,
     marginBottom: 18,
   },
 
   placeCard: {
-    width: 80,
-    height: 116,
+    width: '30.5%',
+    height: 128,
     borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: '#ffffff',
@@ -1075,21 +1522,22 @@ const styles = StyleSheet.create({
 
   placeImage: {
     width: '100%',
-    height: 78,
+    height: 82,
   },
 
   placeImageFallback: {
     width: '100%',
-    height: 78,
+    height: 82,
     backgroundColor: '#e8edf5',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   placeCaption: {
-    flex: 1,
-    justifyContent: 'center',
+    height: 46,
+    justifyContent: 'flex-start',
     paddingHorizontal: 6,
+    paddingTop: 7,
     backgroundColor: '#ffffff',
   },
 
@@ -1107,6 +1555,7 @@ const styles = StyleSheet.create({
     lineHeight: 10,
     fontWeight: '700',
     textAlign: 'center',
+    minHeight: 20,
   },
 
   trendingStatusCard: {
@@ -1372,13 +1821,14 @@ const styles = StyleSheet.create({
   },
 
   timeInput: {
-    width: 82,
+    width: 108,
     height: 38,
     borderRadius: 8,
     backgroundColor: '#eef2fa',
-    color: '#0f172a',
-    fontSize: 12,
-    fontWeight: '800',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
     paddingHorizontal: 10,
   },
 
@@ -1452,6 +1902,130 @@ const styles = StyleSheet.create({
   calendarTitle: {
     color: '#0f172a',
     fontSize: 16,
+    fontWeight: '900',
+  },
+
+  timePickerPanel: {
+    width: '100%',
+    maxHeight: '72%',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    padding: 16,
+  },
+
+  timePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+
+  selectedTimeDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+
+  timeModeButton: {
+    minWidth: 58,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#eef2fa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  activeTimeModeButton: {
+    backgroundColor: '#1f5d86',
+  },
+
+  timeModeText: {
+    color: '#0f172a',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+
+  activeTimeModeText: {
+    color: '#ffffff',
+  },
+
+  timeSeparator: {
+    color: '#0f172a',
+    fontSize: 24,
+    fontWeight: '900',
+    marginHorizontal: 6,
+  },
+
+  periodToggle: {
+    height: 48,
+    minWidth: 48,
+    borderRadius: 8,
+    backgroundColor: '#e0f2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+
+  periodToggleText: {
+    color: '#1f5d86',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+
+  clockFace: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: '#eef2fa',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+
+  clockCenter: {
+    position: 'absolute',
+    left: 104,
+    top: 104,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#1f5d86',
+  },
+
+  clockOption: {
+    position: 'absolute',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  selectedClockOption: {
+    backgroundColor: '#1f5d86',
+  },
+
+  clockOptionText: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+
+  selectedClockOptionText: {
+    color: '#ffffff',
+  },
+
+  timeDoneButton: {
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#1f5d86',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  timeDoneText: {
+    color: '#ffffff',
+    fontSize: 13,
     fontWeight: '900',
   },
 
