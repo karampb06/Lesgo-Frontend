@@ -4,6 +4,7 @@ import { type ComponentProps } from 'react';
 
 type Props = Omit<ComponentProps<typeof Link>, 'href'> & { href: Href & string };
 
+// Opens links in the right place on web and mobile.
 export function ExternalLink({ href, ...rest }: Props) {
   return (
     <Link

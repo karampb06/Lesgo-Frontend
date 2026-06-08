@@ -19,6 +19,7 @@ const missingNativeModuleMessage =
   "Google login native module is missing. Rebuild the Android app with npx expo run:android after updating app.json.";
 
 function getGoogleSigninModule() {
+  // Expo Go does not include this native module, so check before importing it.
   if (!NativeModules.RNGoogleSignin) {
     return null;
   }
@@ -83,6 +84,7 @@ export default function GoogleLogin({
         };
 
         if (authMode === "signup") {
+          // Signup asks for offline access so the backend can use calendar free/busy later.
           nativeGoogleConfig.webClientId = ENV.GOOGLE_WEB_CLIENT_ID;
           nativeGoogleConfig.offlineAccess = true;
           nativeGoogleConfig.forceCodeForRefreshToken = true;
@@ -131,6 +133,7 @@ export default function GoogleLogin({
 
         const preparedProfile = beforeLogin ? await beforeLogin() : profile;
 
+        // Google Play Services must be ready before opening the account picker.
         await GoogleSignin.hasPlayServices({
           showPlayServicesUpdateDialog: true,
         });

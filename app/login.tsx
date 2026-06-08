@@ -14,6 +14,7 @@ import { ThemedView } from '@/components/themed-view';
 
 import GoogleLogin from './GoogleLogin';
 
+// Simple login screen. GoogleLogin handles the actual account picker and backend login.
 export default function LoginScreen() {
   const router = useRouter();
 

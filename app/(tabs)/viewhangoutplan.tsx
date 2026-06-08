@@ -8,6 +8,7 @@ import { useCallback, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+// Shows one plan with its place, time, friends, and cancel action.
 export default function ViewHangoutPlanScreen() {
   const router = useRouter();
   const { user } = useAuth();

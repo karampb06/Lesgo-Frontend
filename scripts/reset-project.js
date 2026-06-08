@@ -45,6 +45,7 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
+// Ask before moving or deleting the starter folders.
 const moveDirectories = async (userInput) => {
   try {
     if (userInput === "y") {

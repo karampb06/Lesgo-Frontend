@@ -24,6 +24,7 @@ type ChatMessage = {
   createdAt: string;
 };
 
+// Shows one conversation and keeps the local message list in sync with the backend.
 export default function ChatScreen() {
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);

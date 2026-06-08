@@ -25,6 +25,7 @@ function getInitial(name?: string, email?: string) {
   return source.charAt(0).toUpperCase();
 }
 
+// Profile lets the user update basic details and sign out.
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, token, updateUser, logout } = useAuth();

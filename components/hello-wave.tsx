@@ -1,5 +1,6 @@
 import Animated from 'react-native-reanimated';
 
+// Tiny animated wave used by the starter screens.
 export function HelloWave() {
   return (
     <Animated.Text

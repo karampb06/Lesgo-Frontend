@@ -51,6 +51,7 @@ type ChatRow = {
   type: 'direct' | 'group';
 };
 
+// Lists all chats so the user can open the right conversation.
 export default function MessagesScreen() {
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);

@@ -7,6 +7,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+// Shows the user's saved hangout plans.
 export default function HangoutPlansScreen() {
   const router = useRouter();
   const { plans, refreshPlans } = useHangoutPlans();

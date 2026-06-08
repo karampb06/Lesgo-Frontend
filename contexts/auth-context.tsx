@@ -1,5 +1,6 @@
 import { createContext, PropsWithChildren, useContext, useState } from 'react';
 
+// Keeps the signed-in user and backend token in one place for the whole app.
 export type AuthUser = {
   backendId?: string;
   id: string;
@@ -28,12 +29,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
+  // Save both values together so screens do not get a user without a token.
   const setSession = (nextUser: AuthUser, nextToken: string) => {
     setUser(nextUser);
     setToken(nextToken);
   };
 
   const updateUser = (profile: Partial<AuthUser>) => {
+    // Only patch the fields that changed, like home area or contact number.
     setUser((currentUser) => {
       if (!currentUser) {
         return currentUser;

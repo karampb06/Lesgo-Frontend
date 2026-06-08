@@ -22,6 +22,7 @@ function TabIcon({
 }) {
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
+  // The active tab gets the blue circle, the others stay plain.
   return (
     <View style={focused ? styles.activeIcon : styles.inactiveIcon}>
       <Ionicons
@@ -38,6 +39,7 @@ export default function TabLayout() {
   const { theme } = useAppTheme();
 
   if (!user || !token) {
+    // Keep private tabs closed until the user has a real session.
     return <Redirect href="/login" />;
   }
 
@@ -103,6 +105,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="index"
           options={{
+            // These screens are opened by code, so they stay hidden from the tab bar.
             href: null,
           }}
         />

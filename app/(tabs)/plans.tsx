@@ -1,4 +1,5 @@
 import { ENV } from '@/constants/env';
+import { TimeClockPicker, formatTimeDisplay } from '@/components/time-clock-picker';
 import { useAuth } from '@/contexts/auth-context';
 import { useHangoutPlans } from '@/contexts/hangout-plans-context';
 import { AppTheme, useAppTheme } from '@/contexts/theme-context';
@@ -52,10 +53,10 @@ const ACTIVITY_OPTIONS = [
   { id: 'outdoors', label: 'Outdoor', icon: 'leaf-outline' },
 ] as const;
 
-const DURATION_OPTIONS = [60, 90, 120, 180];
 const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
 const DATE_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
 
+// One button for each real day, starting today and ending on this day next week.
 type DayWindowOption = {
   offset: number;
   date: Date;
@@ -75,18 +76,36 @@ function startOfDay(date: Date) {
   return nextDate;
 }
 
-function endOfDay(date: Date) {
+function addHours(date: Date, hours: number) {
+  return new Date(date.getTime() + hours * 60 * 60 * 1000);
+}
+
+function formatInputTime(date: Date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function combineDateAndTime(date: Date, time: string) {
+  const [hourText, minuteText] = time.split(':');
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return null;
+  }
+
   const nextDate = new Date(date);
-  nextDate.setHours(23, 59, 59, 999);
+  nextDate.setHours(hour, minute, 0, 0);
   return nextDate;
 }
 
-function getDayWindow(offset: number, now = new Date()) {
-  const selectedDate = addDays(now, offset);
+function getDayTimeWindow(offset: number, startTime: string, endTime: string, now = new Date()) {
+  const selectedDate = offset === 0 ? now : startOfDay(addDays(now, offset));
+  const dateFrom = combineDateAndTime(selectedDate, startTime);
+  const dateTo = combineDateAndTime(selectedDate, endTime);
 
   return {
-    dateFrom: offset === 0 ? now : startOfDay(selectedDate),
-    dateTo: endOfDay(selectedDate),
+    dateFrom,
+    dateTo,
   };
 }
 
@@ -99,7 +118,10 @@ export default function SuggestionsScreen() {
   const [selectedFriendIds, setSelectedFriendIds] = React.useState<string[]>([]);
   const [activityType, setActivityType] = React.useState('food');
   const [selectedDayOffset, setSelectedDayOffset] = React.useState(0);
-  const [durationMinutes, setDurationMinutes] = React.useState(120);
+  const [startTime, setStartTime] = React.useState(() => formatInputTime(new Date()));
+  const [endTime, setEndTime] = React.useState(() => formatInputTime(addHours(new Date(), 2)));
+  const [isTimePickerVisible, setIsTimePickerVisible] = React.useState(false);
+  const [activeTimeField, setActiveTimeField] = React.useState<'start' | 'end'>('start');
   const [suggestions, setSuggestions] = React.useState<HangoutSuggestion[]>([]);
   const [statusMessage, setStatusMessage] = React.useState('');
   const [isLoadingFriends, setIsLoadingFriends] = React.useState(false);
@@ -107,6 +129,7 @@ export default function SuggestionsScreen() {
   const [creatingSuggestionId, setCreatingSuggestionId] = React.useState<string | null>(null);
   const [currentTime, setCurrentTime] = React.useState(() => new Date());
   const dayWindowOptions = React.useMemo<DayWindowOption[]>(() => {
+    // Build the day chips from the actual current day, not a fixed Monday list.
     return Array.from({ length: 8 }, (_, offset) => {
       const date = addDays(currentTime, offset);
 
@@ -118,6 +141,19 @@ export default function SuggestionsScreen() {
       };
     });
   }, [currentTime]);
+  const activeTime = activeTimeField === 'start' ? startTime : endTime;
+  const updateActiveTime = React.useCallback(
+    (nextTime: string) => {
+      // The same clock picker edits either the start or finish field.
+      if (activeTimeField === 'start') {
+        setStartTime(nextTime);
+        return;
+      }
+
+      setEndTime(nextTime);
+    },
+    [activeTimeField]
+  );
 
   const apiFetch = React.useCallback(
     async (path: string, options: RequestInit = {}) => {
@@ -185,7 +221,17 @@ export default function SuggestionsScreen() {
       return;
     }
 
-    const { dateFrom, dateTo } = getDayWindow(selectedDayOffset);
+    const { dateFrom, dateTo } = getDayTimeWindow(selectedDayOffset, startTime, endTime);
+
+    if (!dateFrom || !dateTo) {
+      setStatusMessage('Choose a valid start and finish time.');
+      return;
+    }
+
+    if (dateTo <= dateFrom) {
+      setStatusMessage('Finish time must be after the start time.');
+      return;
+    }
 
     setIsFindingSuggestions(true);
     setStatusMessage('');
@@ -198,7 +244,8 @@ export default function SuggestionsScreen() {
           participantIds: selectedFriendIds,
           dateFrom: dateFrom.toISOString(),
           dateTo: dateTo.toISOString(),
-          durationMinutes,
+          // The backend still expects duration, so calculate it from the chosen times.
+          durationMinutes: Math.round((dateTo.getTime() - dateFrom.getTime()) / 60000),
           activityType,
         }),
       });
@@ -341,19 +388,35 @@ export default function SuggestionsScreen() {
             ))}
           </View>
 
-          <View style={styles.segmentRow}>
-            {DURATION_OPTIONS.map((duration) => (
-              <TouchableOpacity
-                key={duration}
-                style={[styles.segmentButton, durationMinutes === duration && styles.activeSegmentButton]}
-                onPress={() => setDurationMinutes(duration)}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.segmentText, durationMinutes === duration && styles.activeSegmentText]}>
-                  {duration / 60 >= 1.5 ? `${duration / 60}h` : `${duration}m`}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.timeRangeRow}>
+            <TouchableOpacity
+              style={styles.timeRangeInput}
+              onPress={() => {
+                setActiveTimeField('start');
+                setIsTimePickerVisible(true);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.timeRangeLabel}>Start</Text>
+              <View style={styles.timeRangeValue}>
+                <Ionicons name="time-outline" size={15} color="#1f5d86" />
+                <Text style={styles.timeRangeText}>{formatTimeDisplay(startTime)}</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.timeRangeInput}
+              onPress={() => {
+                setActiveTimeField('end');
+                setIsTimePickerVisible(true);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.timeRangeLabel}>Finish</Text>
+              <View style={styles.timeRangeValue}>
+                <Ionicons name="time-outline" size={15} color="#1f5d86" />
+                <Text style={styles.timeRangeText}>{formatTimeDisplay(endTime)}</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -425,6 +488,14 @@ export default function SuggestionsScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <TimeClockPicker
+        visible={isTimePickerVisible}
+        title={activeTimeField === 'start' ? 'Select Start Time' : 'Select Finish Time'}
+        value={activeTime}
+        onChange={updateActiveTime}
+        onClose={() => setIsTimePickerVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -618,6 +689,42 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  timeRangeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+
+  timeRangeInput: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    justifyContent: 'center',
+    gap: 4,
+  },
+
+  timeRangeLabel: {
+    color: theme.colors.primary,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+  },
+
+  timeRangeValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+
+  timeRangeText: {
+    color: theme.colors.text,
+    fontSize: 13,
+    fontWeight: '900',
   },
 
   activeSegmentButton: {

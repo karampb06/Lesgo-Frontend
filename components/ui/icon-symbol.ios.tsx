@@ -1,6 +1,7 @@
 import { SymbolView, SymbolViewProps, SymbolWeight } from 'expo-symbols';
 import { StyleProp, ViewStyle } from 'react-native';
 
+// iOS can use real SF Symbols, so this file keeps that native icon path.
 export function IconSymbol({
   name,
   size = 24,

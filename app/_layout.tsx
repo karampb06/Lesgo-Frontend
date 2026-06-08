@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { AuthProvider } from '@/contexts/auth-context';
 import { AppThemeProvider, useAppTheme } from '@/contexts/theme-context';
 
+// RootLayout wraps the app with gesture support and the theme provider.
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -23,6 +24,7 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={theme.mode === 'dark' ? DarkTheme : DefaultTheme}>
+      {/* AuthProvider sits here so login, signup, and tabs can all share the session. */}
       <AuthProvider>
         <Stack initialRouteName="login">
           <Stack.Screen name="login" options={{ headerShown: false }} />

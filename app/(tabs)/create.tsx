@@ -32,6 +32,7 @@ type AgentPlan = {
   participants?: string[];
 };
 
+// Older AI suggestions screen. The newer smart planning flow lives in plans.tsx.
 export default function AiSuggestionsScreen() {
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);

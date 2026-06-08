@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
+// Shared fallback colors for older themed helper components.
 export const Colors = {
   light: {
     text: '#11181C',
@@ -28,6 +29,7 @@ export const Colors = {
 };
 
 export const Fonts = Platform.select({
+  // Keep font names platform-friendly so text renders cleanly everywhere.
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',

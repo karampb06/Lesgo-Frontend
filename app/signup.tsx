@@ -21,6 +21,7 @@ export const unstable_settings = {
   headerShown: false,
 };
 
+// Signup asks for the home area first, then Google finishes the account setup.
 export default function SignupScreen() {
   const router = useRouter();
   const [homeArea, setHomeArea] = useState('');
@@ -46,6 +47,7 @@ export default function SignupScreen() {
       throw new Error(data?.message ?? 'Could not find that home area.');
     }
 
+    // Send the geocoded area into GoogleLogin so the backend can save it with the user.
     setLocationError('');
 
     return data;

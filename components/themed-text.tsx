@@ -17,6 +17,7 @@ export function ThemedText({
 }: ThemedTextProps) {
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
 
+  // This keeps basic text styling consistent across the app.
   return (
     <Text
       style={[

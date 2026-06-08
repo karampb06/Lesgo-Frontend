@@ -12,6 +12,7 @@ function getLocationName(param: string | string[] | undefined) {
   return param ?? 'XYZ';
 }
 
+// Confirmation screen after a hangout plan has been created.
 export default function HangoutPlanCreatedScreen() {
   const router = useRouter();
   const { locationName, planId } = useLocalSearchParams<{

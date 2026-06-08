@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ENV } from '@/constants/env';
+import { TimeClockPicker, formatTimeDisplay } from '@/components/time-clock-picker';
 import { useAuth } from '@/contexts/auth-context';
 import { useHangoutPlans } from '@/contexts/hangout-plans-context';
 import { AppTheme, useAppTheme } from '@/contexts/theme-context';
@@ -90,10 +91,12 @@ export default function HomePage() {
   const [selectedPlaceFriendIds, setSelectedPlaceFriendIds] = React.useState<string[]>([]);
   const [planDate, setPlanDate] = React.useState(() => formatInputDate(getDefaultPlanDate()));
   const [planTime, setPlanTime] = React.useState(() => formatInputTime(getDefaultPlanDate()));
-  const [durationMinutes, setDurationMinutes] = React.useState(120);
+  const [planEndTime, setPlanEndTime] = React.useState(() =>
+    formatInputTime(new Date(getDefaultPlanDate().getTime() + 2 * 60 * 60 * 1000))
+  );
   const [isCalendarVisible, setIsCalendarVisible] = React.useState(false);
   const [isTimePickerVisible, setIsTimePickerVisible] = React.useState(false);
-  const [timePickerMode, setTimePickerMode] = React.useState<'hour' | 'minute'>('hour');
+  const [activeTimeField, setActiveTimeField] = React.useState<'start' | 'end'>('start');
   const [calendarMonth, setCalendarMonth] = React.useState(() => getDefaultPlanDate());
   const [isLoadingFriends, setIsLoadingFriends] = React.useState(false);
   const [isCreatingPlacePlan, setIsCreatingPlacePlan] = React.useState(false);
@@ -101,6 +104,19 @@ export default function HomePage() {
   const [notificationMessage, setNotificationMessage] = React.useState('');
   const [isNotificationActionLoading, setIsNotificationActionLoading] = React.useState(false);
   const notificationCount = friendRequests.length + planInvites.length;
+  const activePlanTime = activeTimeField === 'start' ? planTime : planEndTime;
+  const updateActivePlanTime = React.useCallback(
+    (nextTime: string) => {
+      // Reuse one clock picker for both start and finish time.
+      if (activeTimeField === 'start') {
+        setPlanTime(nextTime);
+        return;
+      }
+
+      setPlanEndTime(nextTime);
+    },
+    [activeTimeField]
+  );
 
   React.useEffect(() => {
     if (!activeTrendingSection) {
@@ -143,6 +159,7 @@ export default function HomePage() {
     try {
       const params = new URLSearchParams();
 
+      // Prefer exact home coordinates, but fall back to the user's home area.
       if (
         typeof homeLat === 'number' &&
         Number.isFinite(homeLat) &&
@@ -246,13 +263,19 @@ export default function HomePage() {
     }
 
     const startsAt = parsePlanDateTime(planDate, planTime);
+    const endsAt = parsePlanDateTime(planDate, planEndTime);
 
-    if (!startsAt) {
+    if (!startsAt || !endsAt) {
       setAddPlaceMessage('Use date YYYY-MM-DD and time HH:mm.');
       return;
     }
 
-    const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
+    if (endsAt <= startsAt) {
+      // A finish time before the start time would create a broken invite.
+      setAddPlaceMessage('Finish time must be after the start time.');
+      return;
+    }
+
     const title = `Hangout at ${selectedPlace.name}`;
 
     setIsCreatingPlacePlan(true);
@@ -826,31 +849,36 @@ export default function HomePage() {
                 >
                   <Text style={styles.planInputText}>{planDate}</Text>
                 </TouchableOpacity>
+              </View>
+              <View style={styles.timeRangeRow}>
                 <TouchableOpacity
-                  style={styles.timeInput}
+                  style={styles.timeRangeInput}
                   onPress={() => {
-                    setTimePickerMode('hour');
+                    setActiveTimeField('start');
                     setIsTimePickerVisible(true);
                   }}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="time-outline" size={15} color="#1f5d86" />
-                  <Text style={styles.planInputText}>{formatTimeDisplay(planTime)}</Text>
+                  <Text style={styles.timeRangeLabel}>Start</Text>
+                  <View style={styles.timeRangeValue}>
+                    <Ionicons name="time-outline" size={15} color="#1f5d86" />
+                    <Text style={styles.planInputText}>{formatTimeDisplay(planTime)}</Text>
+                  </View>
                 </TouchableOpacity>
-              </View>
-              <View style={styles.durationRow}>
-                {[60, 90, 120, 180].map((duration) => (
-                  <TouchableOpacity
-                    key={duration}
-                    style={[styles.durationButton, durationMinutes === duration && styles.activeDurationButton]}
-                    onPress={() => setDurationMinutes(duration)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.durationText, durationMinutes === duration && styles.activeDurationText]}>
-                      {duration / 60 >= 1.5 ? `${duration / 60}h` : `${duration}m`}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <TouchableOpacity
+                  style={styles.timeRangeInput}
+                  onPress={() => {
+                    setActiveTimeField('end');
+                    setIsTimePickerVisible(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.timeRangeLabel}>Finish</Text>
+                  <View style={styles.timeRangeValue}>
+                    <Ionicons name="time-outline" size={15} color="#1f5d86" />
+                    <Text style={styles.planInputText}>{formatTimeDisplay(planEndTime)}</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
 
               {addPlaceMessage ? <Text style={styles.placeInviteStatus}>{addPlaceMessage}</Text> : null}
@@ -959,95 +987,13 @@ export default function HomePage() {
         </View>
       </Modal>
 
-      <Modal
+      <TimeClockPicker
         visible={isTimePickerVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsTimePickerVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.timePickerPanel}>
-            <View style={styles.timePickerHeader}>
-              <Ionicons name="time-outline" size={20} color="#1f5d86" />
-              <Text style={styles.calendarTitle}>Select Time</Text>
-              <TouchableOpacity
-                style={styles.calendarNavButton}
-                onPress={() => setIsTimePickerVisible(false)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="close" size={20} color="#0f172a" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.selectedTimeDisplay}>
-              <TouchableOpacity
-                style={[styles.timeModeButton, timePickerMode === 'hour' && styles.activeTimeModeButton]}
-                onPress={() => setTimePickerMode('hour')}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.timeModeText, timePickerMode === 'hour' && styles.activeTimeModeText]}>
-                  {formatTimeParts(planTime).hourLabel}
-                </Text>
-              </TouchableOpacity>
-              <Text style={styles.timeSeparator}>:</Text>
-              <TouchableOpacity
-                style={[styles.timeModeButton, timePickerMode === 'minute' && styles.activeTimeModeButton]}
-                onPress={() => setTimePickerMode('minute')}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.timeModeText, timePickerMode === 'minute' && styles.activeTimeModeText]}>
-                  {formatTimeParts(planTime).minuteLabel}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.periodToggle}
-                onPress={() => setPlanTime(toggleTimePeriod(planTime))}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.periodToggleText}>{formatTimeParts(planTime).period}</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.clockFace}>
-              <View style={styles.clockCenter} />
-              {(timePickerMode === 'hour' ? getClockHours() : getClockMinutes()).map((option) => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.clockOption,
-                    option.position,
-                    option.value === getSelectedClockValue(planTime, timePickerMode) && styles.selectedClockOption,
-                  ]}
-                  onPress={() => {
-                    setPlanTime(updatePlanTimePart(planTime, timePickerMode, option.value));
-                    if (timePickerMode === 'hour') {
-                      setTimePickerMode('minute');
-                    }
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text
-                    style={[
-                      styles.clockOptionText,
-                      option.value === getSelectedClockValue(planTime, timePickerMode) && styles.selectedClockOptionText,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={styles.timeDoneButton}
-              onPress={() => setIsTimePickerVisible(false)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.timeDoneText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        title={activeTimeField === 'start' ? 'Select Start Time' : 'Select Finish Time'}
+        value={activePlanTime}
+        onChange={updateActivePlanTime}
+        onClose={() => setIsTimePickerVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -1098,100 +1044,6 @@ function formatInputDate(date: Date) {
 
 function formatInputTime(date: Date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-function formatTimeDisplay(time: string) {
-  const [hourText, minuteText] = time.split(':');
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
-    return time;
-  }
-
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;
-  return `${displayHour}:${String(minute).padStart(2, '0')} ${period}`;
-}
-
-function formatTimeParts(time: string) {
-  const [hourText, minuteText] = time.split(':');
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;
-
-  return {
-    hourLabel: String(displayHour).padStart(2, '0'),
-    minuteLabel: String(Number.isFinite(minute) ? minute : 0).padStart(2, '0'),
-    period,
-  };
-}
-
-function getClockHours() {
-  return Array.from({ length: 12 }, (_, index) => {
-    const value = index + 1;
-    return {
-      value,
-      label: String(value),
-      position: getClockOptionPosition(index, 12),
-    };
-  });
-}
-
-function getClockMinutes() {
-  return [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((value, index) => ({
-    value,
-    label: String(value).padStart(2, '0'),
-    position: getClockOptionPosition(index, 12),
-  }));
-}
-
-function getClockOptionPosition(index: number, count: number) {
-  const clockSize = 220;
-  const optionSize = 42;
-  const radius = 84;
-  const angle = (index / count) * 2 * Math.PI - Math.PI / 2;
-  const center = clockSize / 2 - optionSize / 2;
-
-  return {
-    left: center + radius * Math.cos(angle),
-    top: center + radius * Math.sin(angle),
-  };
-}
-
-function getSelectedClockValue(time: string, mode: 'hour' | 'minute') {
-  const [hourText, minuteText] = time.split(':');
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-
-  if (mode === 'hour') {
-    return hour % 12 || 12;
-  }
-
-  return Math.round((Number.isFinite(minute) ? minute : 0) / 5) * 5;
-}
-
-function updatePlanTimePart(time: string, mode: 'hour' | 'minute', value: number) {
-  const [hourText, minuteText] = time.split(':');
-  const currentHour = Number(hourText);
-  const currentMinute = Number(minuteText);
-
-  if (mode === 'minute') {
-    return `${String(Number.isFinite(currentHour) ? currentHour : 18).padStart(2, '0')}:${String(value).padStart(2, '0')}`;
-  }
-
-  const isPm = (Number.isFinite(currentHour) ? currentHour : 18) >= 12;
-  const hour24 = isPm ? (value === 12 ? 12 : value + 12) : (value === 12 ? 0 : value);
-  return `${String(hour24).padStart(2, '0')}:${String(Number.isFinite(currentMinute) ? currentMinute : 0).padStart(2, '0')}`;
-}
-
-function toggleTimePeriod(time: string) {
-  const [hourText, minuteText] = time.split(':');
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-  const nextHour = ((Number.isFinite(hour) ? hour : 18) + 12) % 24;
-  return `${String(nextHour).padStart(2, '0')}:${String(Number.isFinite(minute) ? minute : 0).padStart(2, '0')}`;
 }
 
 function startOfToday() {
@@ -1895,6 +1747,36 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     justifyContent: 'center',
     gap: 5,
     paddingHorizontal: 10,
+  },
+
+  timeRangeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+
+  timeRangeInput: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 8,
+    backgroundColor: '#eef2fa',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    justifyContent: 'center',
+    gap: 3,
+  },
+
+  timeRangeLabel: {
+    color: '#1f5d86',
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '900',
+  },
+
+  timeRangeValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 
   durationRow: {

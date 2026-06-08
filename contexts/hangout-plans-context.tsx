@@ -48,6 +48,7 @@ const HangoutPlansContext = createContext<HangoutPlansContextValue | null>(null)
 function sortPlansByUpcomingDate(plans: HangoutPlan[]) {
   const now = Date.now();
 
+  // Hide finished plans and keep the next hangouts at the top.
   return [...plans]
     .filter((plan) => {
       const expiresAt = new Date(plan.endsAt ?? plan.scheduledAt).getTime();
@@ -65,6 +66,7 @@ export function HangoutPlansProvider({ children }: PropsWithChildren) {
 
   const refreshPlans = useCallback(async () => {
     if (!token) {
+      // A logged-out user should not keep seeing old plans.
       setPlans([]);
       return;
     }
@@ -81,6 +83,7 @@ export function HangoutPlansProvider({ children }: PropsWithChildren) {
     }
 
     const backendPlans: HangoutPlan[] = (data.plans ?? []).map((plan: any) => {
+      // The backend has changed shape a few times, so we normalize it here.
       const participantProfiles = normalizeParticipantProfiles(plan);
       const inviteStatuses = normalizeInviteStatuses(plan);
       const participants = normalizeParticipantNames(plan.participants);
@@ -173,6 +176,7 @@ function formatPlanLabel(scheduledAt: string) {
 }
 
 async function cancelBackendPlan(planId: string, token: string) {
+  // Try the cancel endpoint first, then fall back to older backend routes.
   const requests: RequestInit[] = [
     { method: 'PATCH' },
     { method: 'DELETE' },
@@ -209,6 +213,7 @@ async function cancelBackendPlan(planId: string, token: string) {
 }
 
 function normalizeParticipantProfiles(plan: any): PlanParticipant[] {
+  // Collect people from every backend field we know about.
   const sources = [
     ...(Array.isArray(plan.participantProfiles) ? plan.participantProfiles : []),
     ...(Array.isArray(plan.participants) ? plan.participants.filter((participant: any) => typeof participant !== 'string') : []),

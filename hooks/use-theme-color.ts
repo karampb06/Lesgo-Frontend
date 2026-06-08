@@ -13,6 +13,7 @@ export function useThemeColor(
   const theme = useColorScheme() ?? 'light';
   const colorFromProps = props[theme];
 
+  // A direct prop color wins, otherwise use the app's theme color.
   if (colorFromProps) {
     return colorFromProps;
   } else {

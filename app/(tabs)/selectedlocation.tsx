@@ -12,6 +12,7 @@ function getLocationName(param: string | string[] | undefined) {
   return param ?? 'Selected Location';
 }
 
+// Shows the place the user picked before they confirm a plan.
 export default function SelectedLocationScreen() {
   const router = useRouter();
   const { locationName } = useLocalSearchParams<{ locationName?: string | string[] }>();

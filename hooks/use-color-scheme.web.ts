@@ -13,6 +13,7 @@ export function useColorScheme() {
 
   const colorScheme = useRNColorScheme();
 
+  // Before hydration, use light mode so web rendering stays stable.
   if (hasHydrated) {
     return colorScheme;
   }

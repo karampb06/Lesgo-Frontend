@@ -72,6 +72,7 @@ const darkTheme: AppTheme = {
 const ThemeContext = React.createContext<ThemeContextValue | null>(null);
 
 function resolveTheme(mode: ThemeMode, systemScheme: ColorSchemeName) {
+  // "System" follows the phone setting, otherwise we use the chosen mode.
   const resolvedMode = mode === 'system' ? systemScheme : mode;
   return resolvedMode === 'dark' ? darkTheme : lightTheme;
 }
