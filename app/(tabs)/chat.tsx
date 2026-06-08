@@ -1,5 +1,6 @@
 import { ENV } from '@/constants/env';
 import { useAuth } from '@/contexts/auth-context';
+import { AppTheme, useAppTheme } from '@/contexts/theme-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -24,6 +25,8 @@ type ChatMessage = {
 };
 
 export default function ChatScreen() {
+  const { theme } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
   const { conversationId, title } = useLocalSearchParams<{
     conversationId?: string;
@@ -175,10 +178,10 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#a9b2bd',
+    backgroundColor: theme.colors.background,
   },
 
   keyboardView: {
@@ -191,14 +194,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#eef2fa',
+    backgroundColor: theme.colors.surface,
   },
 
   backButton: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -209,13 +212,13 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 13,
     fontWeight: '900',
   },
 
   subtitle: {
-    color: '#64748b',
+    color: theme.colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
     marginTop: 1,
@@ -243,12 +246,12 @@ const styles = StyleSheet.create({
 
   myMessageBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#008f62',
+    backgroundColor: theme.colors.success,
   },
 
   theirMessageBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#009f71',
+    backgroundColor: theme.colors.primary,
   },
 
   messageText: {
@@ -282,13 +285,13 @@ const styles = StyleSheet.create({
 
   emptyText: {
     alignSelf: 'center',
-    color: '#334155',
+    color: theme.colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
   },
 
   statusText: {
-    color: '#b91c1c',
+    color: theme.colors.danger,
     fontSize: 12,
     fontWeight: '800',
     paddingHorizontal: 12,
@@ -302,7 +305,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 8,
     paddingBottom: 10,
-    backgroundColor: '#eef2fa',
+    backgroundColor: theme.colors.surface,
   },
 
   input: {
@@ -310,8 +313,8 @@ const styles = StyleSheet.create({
     minHeight: 34,
     maxHeight: 88,
     borderRadius: 4,
-    backgroundColor: '#ffffff',
-    color: '#0f172a',
+    backgroundColor: theme.colors.surfaceMuted,
+    color: theme.colors.text,
     fontSize: 12,
     fontWeight: '700',
     paddingHorizontal: 12,
@@ -322,7 +325,7 @@ const styles = StyleSheet.create({
     width: 58,
     minHeight: 34,
     borderRadius: 4,
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

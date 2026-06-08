@@ -1,12 +1,11 @@
 import { HangoutPlansProvider } from '@/contexts/hangout-plans-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/contexts/auth-context';
-
-const TAB_BLUE = '#1f5d86';
-const TAB_MUTED = '#111827';
+import { AppTheme, useAppTheme } from '@/contexts/theme-context';
 
 type TabIconName = keyof typeof Ionicons.glyphMap;
 
@@ -14,17 +13,21 @@ function TabIcon({
   focused,
   name,
   activeName,
+  theme,
 }: {
   focused: boolean;
   name: TabIconName;
   activeName: TabIconName;
+  theme: AppTheme;
 }) {
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
+
   return (
     <View style={focused ? styles.activeIcon : styles.inactiveIcon}>
       <Ionicons
         name={focused ? activeName : name}
         size={focused ? 25 : 24}
-        color={focused ? '#ffffff' : TAB_MUTED}
+        color={focused ? '#ffffff' : theme.colors.text}
       />
     </View>
   );
@@ -32,6 +35,7 @@ function TabIcon({
 
 export default function TabLayout() {
   const { user, token } = useAuth();
+  const { theme } = useAppTheme();
 
   if (!user || !token) {
     return <Redirect href="/login" />;
@@ -47,7 +51,7 @@ export default function TabLayout() {
           tabBarStyle: {
             height: 72,
             borderTopWidth: 0,
-            backgroundColor: '#ffffff',
+            backgroundColor: theme.colors.tabBar,
             paddingTop: 10,
             paddingBottom: 10,
           },
@@ -60,7 +64,7 @@ export default function TabLayout() {
           name="homepage"
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name="home-outline" activeName="home-outline" />
+              <TabIcon focused={focused} name="home-outline" activeName="home-outline" theme={theme} />
             ),
           }}
         />
@@ -68,7 +72,7 @@ export default function TabLayout() {
           name="plans"
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name="time-outline" activeName="time-outline" />
+              <TabIcon focused={focused} name="time-outline" activeName="time-outline" theme={theme} />
             ),
           }}
         />
@@ -76,7 +80,7 @@ export default function TabLayout() {
           name="messages"
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name="chatbox" activeName="chatbox" />
+              <TabIcon focused={focused} name="chatbox" activeName="chatbox" theme={theme} />
             ),
           }}
         />
@@ -84,7 +88,7 @@ export default function TabLayout() {
           name="create"
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name="sparkles-outline" activeName="sparkles-outline" />
+              <TabIcon focused={focused} name="sparkles-outline" activeName="sparkles-outline" theme={theme} />
             ),
           }}
         />
@@ -92,7 +96,7 @@ export default function TabLayout() {
           name="profile"
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name="person-outline" activeName="person-outline" />
+              <TabIcon focused={focused} name="person-outline" activeName="person-outline" theme={theme} />
             ),
           }}
         />
@@ -143,12 +147,12 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   activeIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: TAB_BLUE,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

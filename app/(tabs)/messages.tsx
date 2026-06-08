@@ -1,5 +1,6 @@
 import { ENV } from '@/constants/env';
 import { useAuth } from '@/contexts/auth-context';
+import { AppTheme, useAppTheme } from '@/contexts/theme-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -51,6 +52,8 @@ type ChatRow = {
 };
 
 export default function MessagesScreen() {
+  const { theme } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
   const { token, user } = useAuth();
   const [friendCode, setFriendCode] = React.useState('');
@@ -352,10 +355,10 @@ function getInitials(name: string) {
   return parts.slice(0, 2).map((part) => part[0].toUpperCase()).join('');
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#a9b2bd',
+    backgroundColor: theme.colors.background,
   },
 
   content: {
@@ -373,7 +376,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 18,
     lineHeight: 22,
     fontWeight: '900',
@@ -383,7 +386,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -395,7 +398,7 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#ef4444',
+    backgroundColor: theme.colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
@@ -411,7 +414,7 @@ const styles = StyleSheet.create({
     width: 172,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     flexDirection: 'row',
     padding: 3,
     marginBottom: 14,
@@ -425,11 +428,11 @@ const styles = StyleSheet.create({
   },
 
   activeSegmentButton: {
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
   },
 
   segmentText: {
-    color: '#64748b',
+    color: theme.colors.textMuted,
     fontSize: 9,
     fontWeight: '900',
   },
@@ -439,7 +442,7 @@ const styles = StyleSheet.create({
   },
 
   statusText: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 12,
     fontWeight: '800',
     marginBottom: 8,
@@ -456,7 +459,7 @@ const styles = StyleSheet.create({
   chatRow: {
     minHeight: 58,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.24)',
+    borderBottomColor: theme.colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 9,
@@ -466,7 +469,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -484,13 +487,13 @@ const styles = StyleSheet.create({
   },
 
   rowTitle: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 14,
     fontWeight: '900',
   },
 
   rowSubtitle: {
-    color: '#475569',
+    color: theme.colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
@@ -502,13 +505,13 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 17,
     fontWeight: '900',
   },
 
   emptyText: {
-    color: '#334155',
+    color: theme.colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
     marginTop: 4,
@@ -522,14 +525,14 @@ const styles = StyleSheet.create({
   },
 
   groupPlaceholderTitle: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 18,
     fontWeight: '900',
     marginTop: 10,
   },
 
   groupPlaceholderText: {
-    color: '#334155',
+    color: theme.colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
     marginTop: 4,
@@ -544,7 +547,7 @@ const styles = StyleSheet.create({
 
   modalPanel: {
     borderRadius: 8,
-    backgroundColor: '#eef2fa',
+    backgroundColor: theme.colors.surface,
     padding: 16,
   },
 
@@ -556,7 +559,7 @@ const styles = StyleSheet.create({
   },
 
   modalTitle: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 20,
     fontWeight: '900',
   },
@@ -565,7 +568,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -573,8 +576,8 @@ const styles = StyleSheet.create({
   friendCodeInput: {
     height: 44,
     borderRadius: 8,
-    backgroundColor: '#ffffff',
-    color: '#0f172a',
+    backgroundColor: theme.colors.surfaceMuted,
+    color: theme.colors.text,
     fontSize: 14,
     fontWeight: '700',
     paddingHorizontal: 12,
@@ -583,7 +586,7 @@ const styles = StyleSheet.create({
   addFriendButton: {
     height: 42,
     borderRadius: 8,
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 10,
@@ -596,7 +599,7 @@ const styles = StyleSheet.create({
   },
 
   modalSectionTitle: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 15,
     fontWeight: '900',
     marginTop: 18,
@@ -606,7 +609,7 @@ const styles = StyleSheet.create({
   requestRow: {
     minHeight: 52,
     borderRadius: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surfaceMuted,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -618,7 +621,7 @@ const styles = StyleSheet.create({
     minWidth: 66,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
@@ -631,7 +634,7 @@ const styles = StyleSheet.create({
   },
 
   modalEmptyText: {
-    color: '#64748b',
+    color: theme.colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
   },

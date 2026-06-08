@@ -1,6 +1,8 @@
 import { useAuth } from '@/contexts/auth-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -16,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ENV } from '@/constants/env';
+import { AppTheme, ThemeMode, useAppTheme } from '@/contexts/theme-context';
 
 function getInitial(name?: string, email?: string) {
   const source = name?.trim() || email?.trim() || 'U';
@@ -25,6 +28,8 @@ function getInitial(name?: string, email?: string) {
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, token, updateUser, logout } = useAuth();
+  const { theme, themeMode, setThemeMode } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -122,17 +127,55 @@ export default function ProfileScreen() {
             <Text style={styles.friendCodeValue}>{user?.friendCode ?? 'Sign in again to generate'}</Text>
           </View>
 
+          <View style={styles.settingsCard}>
+            <View style={styles.settingsHeader}>
+              <View style={styles.settingsIcon}>
+                <Ionicons name="contrast-outline" size={18} color="#ffffff" />
+              </View>
+              <View style={styles.settingsCopy}>
+                <Text style={styles.settingsTitle}>Appearance</Text>
+                <Text style={styles.settingsSubtitle}>Choose how LesGo looks on this device.</Text>
+              </View>
+            </View>
+            <View style={styles.themeOptions}>
+              {(['system', 'light', 'dark'] as ThemeMode[]).map((mode) => {
+                const isActive = themeMode === mode;
+
+                return (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.themeOption, isActive && styles.activeThemeOption]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setThemeMode(mode);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons
+                      name={mode === 'system' ? 'phone-portrait-outline' : mode === 'light' ? 'sunny-outline' : 'moon-outline'}
+                      size={15}
+                      color={isActive ? '#ffffff' : theme.colors.primary}
+                    />
+                    <Text style={[styles.themeOptionText, isActive && styles.activeThemeOptionText]}>
+                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
           <View style={styles.form}>
             <TextInput
               placeholder="Name"
-              placeholderTextColor="#8b96a8"
+              placeholderTextColor={theme.colors.textMuted}
               value={name}
               onChangeText={setName}
               style={styles.input}
             />
             <TextInput
               placeholder="Email"
-              placeholderTextColor="#8b96a8"
+              placeholderTextColor={theme.colors.textMuted}
               value={email}
               onChangeText={setEmail}
               style={styles.input}
@@ -141,7 +184,7 @@ export default function ProfileScreen() {
             />
             <TextInput
               placeholder="Contact Number"
-              placeholderTextColor="#8b96a8"
+              placeholderTextColor={theme.colors.textMuted}
               value={contactNumber}
               onChangeText={setContactNumber}
               style={styles.input}
@@ -168,10 +211,10 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#a9b2bd',
+    backgroundColor: theme.colors.background,
   },
 
   keyboardView: {
@@ -181,8 +224,8 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 64,
+    paddingHorizontal: 18,
+    paddingTop: 34,
     paddingBottom: 28,
   },
 
@@ -190,7 +233,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#1b5b82',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -214,40 +257,122 @@ const styles = StyleSheet.create({
 
   friendCodeCard: {
     width: '100%',
-    borderRadius: 8,
-    backgroundColor: '#eef2fa',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     marginBottom: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
 
   friendCodeLabel: {
-    color: '#64748b',
+    color: theme.colors.textMuted,
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
 
   friendCodeValue: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 18,
     fontWeight: '900',
     marginTop: 2,
   },
 
+  settingsCard: {
+    width: '100%',
+    borderRadius: 16,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: 14,
+    marginBottom: 14,
+  },
+
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+
+  settingsIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  settingsCopy: {
+    flex: 1,
+  },
+
+  settingsTitle: {
+    color: theme.colors.text,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+
+  settingsSubtitle: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+
+  themeOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+
+  themeOption: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 12,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+
+  activeThemeOption: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+
+  themeOptionText: {
+    color: theme.colors.text,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+
+  activeThemeOptionText: {
+    color: '#ffffff',
+  },
+
   input: {
     width: '100%',
-    height: 34,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    marginBottom: 9,
-    backgroundColor: '#eef2fa',
-    color: '#0f172a',
-    fontSize: 12,
+    height: 46,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+    backgroundColor: theme.colors.surface,
+    color: theme.colors.text,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   statusText: {
-    color: '#1b5b82',
+    color: theme.colors.primary,
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 9,
@@ -256,9 +381,9 @@ const styles = StyleSheet.create({
 
   saveButton: {
     width: '100%',
-    height: 34,
-    borderRadius: 7,
-    backgroundColor: '#1b5b82',
+    height: 46,
+    borderRadius: 13,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
@@ -272,18 +397,18 @@ const styles = StyleSheet.create({
 
   logoutButton: {
     width: '100%',
-    height: 34,
-    borderRadius: 7,
+    height: 44,
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: '#ef4444',
-    backgroundColor: '#ffffff',
+    borderColor: theme.colors.danger,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 18,
   },
 
   logoutButtonText: {
-    color: '#1b5b82',
+    color: theme.colors.danger,
     fontSize: 14,
     fontWeight: '800',
   },

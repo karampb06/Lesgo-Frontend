@@ -1,6 +1,7 @@
 import { ENV } from '@/constants/env';
 import { useAuth } from '@/contexts/auth-context';
 import { useHangoutPlans } from '@/contexts/hangout-plans-context';
+import { AppTheme, useAppTheme } from '@/contexts/theme-context';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
@@ -32,6 +33,8 @@ type AgentPlan = {
 };
 
 export default function AiSuggestionsScreen() {
+  const { theme } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const { token } = useAuth();
   const { addPlan } = useHangoutPlans();
   const scrollRef = React.useRef<ScrollView>(null);
@@ -241,10 +244,10 @@ export default function AiSuggestionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#edf2f7',
+    backgroundColor: theme.colors.background,
   },
 
   keyboardView: {
@@ -257,16 +260,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 14,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#dbe3ec',
+    borderBottomColor: theme.colors.border,
   },
 
   iconCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -277,14 +280,14 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 22,
     lineHeight: 28,
     fontWeight: '900',
   },
 
   subtitle: {
-    color: '#64748b',
+    color: theme.colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
@@ -305,16 +308,16 @@ const styles = StyleSheet.create({
 
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
     borderBottomRightRadius: 6,
   },
 
   assistantBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     borderBottomLeftRadius: 6,
     borderWidth: 1,
-    borderColor: '#dbe3ec',
+    borderColor: theme.colors.border,
   },
 
   loadingBubble: {
@@ -333,11 +336,11 @@ const styles = StyleSheet.create({
   },
 
   assistantMessageText: {
-    color: '#111827',
+    color: theme.colors.text,
   },
 
   statusText: {
-    color: '#b91c1c',
+    color: theme.colors.danger,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
@@ -352,9 +355,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 10,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#dbe3ec',
+    borderTopColor: theme.colors.border,
   },
 
   input: {
@@ -363,11 +366,11 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#d8dee7',
-    backgroundColor: '#f8fafc',
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceMuted,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 15,
     lineHeight: 20,
     fontWeight: '700',
@@ -377,7 +380,7 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

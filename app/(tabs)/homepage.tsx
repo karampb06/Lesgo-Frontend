@@ -2,13 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { ENV } from '@/constants/env';
 import { useAuth } from '@/contexts/auth-context';
 import { useHangoutPlans } from '@/contexts/hangout-plans-context';
+import { AppTheme, useAppTheme } from '@/contexts/theme-context';
 import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Linking,
   Modal,
   ScrollView,
@@ -62,6 +65,9 @@ type PlanInvite = {
 
 export default function HomePage() {
   const router = useRouter();
+  const { theme } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const resultRevealAnim = React.useRef(new Animated.Value(0)).current;
   const { token, user } = useAuth();
   const { plans, addPlan, refreshPlans } = useHangoutPlans();
   const homeArea = user?.homeArea;
@@ -95,6 +101,19 @@ export default function HomePage() {
   const [notificationMessage, setNotificationMessage] = React.useState('');
   const [isNotificationActionLoading, setIsNotificationActionLoading] = React.useState(false);
   const notificationCount = friendRequests.length + planInvites.length;
+
+  React.useEffect(() => {
+    if (!activeTrendingSection) {
+      resultRevealAnim.setValue(0);
+      return;
+    }
+
+    Animated.timing(resultRevealAnim, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [activeTrendingSection, resultRevealAnim]);
 
   const apiFetch = React.useCallback(
     async (path: string, options: RequestInit = {}) => {
@@ -441,9 +460,10 @@ export default function HomePage() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.trendingHeader}>
+        <View style={styles.discoveryPanel}>
           <View style={styles.trendingTitleRow}>
-            <View>
+            <View style={styles.discoveryTitleCopy}>
+              <Text style={styles.discoveryKicker}>Near you</Text>
               <Text style={styles.sectionTitle}>
                 {activeTrendingSection === 'places'
                   ? 'Trending Places'
@@ -456,7 +476,10 @@ export default function HomePage() {
             {activeTrendingSection ? (
               <TouchableOpacity
                 style={styles.trendingBackButton}
-                onPress={() => setActiveTrendingSection(null)}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setActiveTrendingSection(null);
+                }}
                 activeOpacity={0.85}
               >
                 <Ionicons name="chevron-back" size={18} color="#1f5d86" />
@@ -469,89 +492,83 @@ export default function HomePage() {
             )}
           </View>
 
-          <View style={styles.trendingToggle}>
-            <TouchableOpacity
-              style={[
-                styles.trendingToggleButton,
-                activeTrendingSection === 'places' && styles.activeTrendingToggleButton,
-              ]}
-              onPress={() => setActiveTrendingSection('places')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.trendingToggleLabel}>
-                <Ionicons
-                  name="restaurant-outline"
-                  size={16}
-                  color={activeTrendingSection === 'places' ? '#ffffff' : '#1f5d86'}
-                />
-                <Text
-                  style={[
-                    styles.trendingToggleText,
-                    activeTrendingSection === 'places' && styles.activeTrendingToggleText,
-                  ]}
-                >
-                  Places
+          {!activeTrendingSection ? (
+            <>
+              <View style={styles.discoveryPreview}>
+                <View style={styles.discoveryIconCluster}>
+                  <View style={[styles.discoveryIcon, styles.discoveryIconPrimary]}>
+                    <Ionicons name="restaurant-outline" size={22} color="#ffffff" />
+                  </View>
+                  <View style={[styles.discoveryIcon, styles.discoveryIconSecondary]}>
+                    <Ionicons name="map-outline" size={22} color="#ffffff" />
+                  </View>
+                  <View style={[styles.discoveryIcon, styles.discoveryIconAccent]}>
+                    <Ionicons name="location-outline" size={20} color="#ffffff" />
+                  </View>
+                </View>
+                <Text style={styles.discoveryTitle}>What kind of vibe today?</Text>
+                <Text style={styles.discoveryText}>
+                  Pick a category to reveal nearby ideas with photos, details, and plan invites.
                 </Text>
               </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.trendingToggleButton,
-                activeTrendingSection === 'activities' && styles.activeTrendingToggleButton,
-              ]}
-              onPress={() => setActiveTrendingSection('activities')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.trendingToggleLabel}>
-                <Ionicons
-                  name="map-outline"
-                  size={16}
-                  color={activeTrendingSection === 'activities' ? '#ffffff' : '#1f5d86'}
-                />
-                <Text
-                  style={[
-                    styles.trendingToggleText,
-                    activeTrendingSection === 'activities' && styles.activeTrendingToggleText,
-                  ]}
+
+              <View style={styles.trendingToggle}>
+                <TouchableOpacity
+                  style={styles.trendingToggleButton}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setActiveTrendingSection('places');
+                  }}
+                  activeOpacity={0.85}
                 >
-                  Activities
-                </Text>
+                  <View style={[styles.categoryIconWrap, styles.categoryIconPrimary]}>
+                    <Ionicons name="restaurant-outline" size={22} color="#ffffff" />
+                  </View>
+                  <View style={styles.categoryCopy}>
+                    <Text style={styles.trendingToggleText}>Places</Text>
+                    <Text style={styles.categoryHint}>Food, cafes, local stops</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#1f5d86" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.trendingToggleButton}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setActiveTrendingSection('activities');
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.categoryIconWrap, styles.categoryIconSecondary]}>
+                    <Ionicons name="map-outline" size={22} color="#ffffff" />
+                  </View>
+                  <View style={styles.categoryCopy}>
+                    <Text style={styles.trendingToggleText}>Activities</Text>
+                    <Text style={styles.categoryHint}>Parks, sights, things to do</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#1f5d86" />
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          </View>
+            </>
+          ) : null}
         </View>
 
-        {!activeTrendingSection ? (
-          <View style={styles.discoveryCard}>
-            <View style={styles.discoveryIconCluster}>
-              <View style={[styles.discoveryIcon, styles.discoveryIconPrimary]}>
-                <Ionicons name="restaurant-outline" size={22} color="#ffffff" />
-              </View>
-              <View style={[styles.discoveryIcon, styles.discoveryIconSecondary]}>
-                <Ionicons name="map-outline" size={22} color="#ffffff" />
-              </View>
-              <View style={[styles.discoveryIcon, styles.discoveryIconAccent]}>
-                <Ionicons name="location-outline" size={20} color="#ffffff" />
-              </View>
-            </View>
-            <Text style={styles.discoveryTitle}>What kind of vibe today?</Text>
-            <Text style={styles.discoveryText}>
-              Pick a lane to reveal nearby ideas with photos, details, and plan invites.
-            </Text>
-            <View style={styles.discoveryStatsRow}>
-              <View style={styles.discoveryStat}>
-                <Ionicons name="restaurant-outline" size={22} color="#1f5d86" />
-                <Text style={styles.discoveryStatLabel}>Places</Text>
-              </View>
-              <View style={styles.discoveryDivider} />
-              <View style={styles.discoveryStat}>
-                <Ionicons name="map-outline" size={22} color="#1f5d86" />
-                <Text style={styles.discoveryStatLabel}>Activities</Text>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.placeRow}>
+        {activeTrendingSection ? (
+          <Animated.View
+            style={[
+              styles.placeRow,
+              {
+                opacity: resultRevealAnim,
+                transform: [
+                  {
+                    translateY: resultRevealAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             {isLoadingTrendingPlaces ? (
               <View style={styles.trendingStatusCard}>
                 <ActivityIndicator color="#1f5d86" />
@@ -572,8 +589,8 @@ export default function HomePage() {
                   </View>
                 )}
                 <View style={styles.placeCaption}>
+                  <Text style={styles.placeBadge} numberOfLines={1}>{place.type}</Text>
                   <Text style={styles.placeName} numberOfLines={1}>{place.name}</Text>
-                  <Text style={styles.placeType} numberOfLines={2}>{place.type}</Text>
                 </View>
               </TouchableOpacity>
               ))
@@ -584,8 +601,8 @@ export default function HomePage() {
                 </Text>
               </View>
             )}
-          </View>
-        )}
+          </Animated.View>
+        ) : null}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming Plans</Text>
@@ -606,13 +623,23 @@ export default function HomePage() {
               onPress={() => openPlanDetails(plan.id)}
               activeOpacity={0.85}
             >
+              <View style={styles.planIconBadge}>
+                <Ionicons name="calendar-outline" size={20} color="#ffffff" />
+              </View>
               <View style={styles.planCopy}>
                 <Text style={styles.planTitle}>{plan.title}</Text>
-                <Text style={styles.planMeta}>
-                  {plan.dateTimeLabel} - {plan.location}
-                </Text>
+                <View style={styles.planMetaRow}>
+                  <Ionicons name="time-outline" size={14} color="#64748b" />
+                  <Text style={styles.planMeta} numberOfLines={1}>{plan.dateTimeLabel}</Text>
+                </View>
+                <View style={styles.planMetaRow}>
+                  <Ionicons name="location-outline" size={14} color="#64748b" />
+                  <Text style={styles.planMeta} numberOfLines={1}>{plan.location}</Text>
+                </View>
               </View>
-              <Text style={styles.planTime}>{getPlanDistanceLabel(plan.scheduledAt)}</Text>
+              <View style={styles.planTimePill}>
+                <Text style={styles.planTime}>{getPlanDistanceLabel(plan.scheduledAt)}</Text>
+              </View>
             </TouchableOpacity>
           )) : (
             <View style={styles.emptyPlansCard}>
@@ -1258,35 +1285,37 @@ function normalizePlanInvites(data: any): PlanInvite[] {
     .filter(Boolean) as PlanInvite[];
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#a9b2bd',
+    backgroundColor: theme.colors.background,
   },
 
   content: {
     flexGrow: 1,
-    paddingHorizontal: 10,
-    paddingTop: 20,
+    paddingHorizontal: 18,
+    paddingTop: 18,
     paddingBottom: 28,
   },
 
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 20,
+    gap: 12,
+    marginBottom: 18,
   },
 
   searchBox: {
     flex: 1,
-    height: 42,
-    borderRadius: 22,
-    backgroundColor: '#ffffff',
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: theme.colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 18,
-    paddingRight: 14,
+    paddingLeft: 20,
+    paddingRight: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
 
   searchInput: {
@@ -1299,9 +1328,9 @@ const styles = StyleSheet.create({
   },
 
   notificationButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#1f5d86',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1327,46 +1356,64 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    color: '#0f172a',
-    fontSize: 19,
-    lineHeight: 24,
-    fontWeight: '800',
+    color: theme.colors.text,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '900',
   },
 
-  trendingHeader: {
-    gap: 10,
+  discoveryPanel: {
+    borderRadius: 18,
+    backgroundColor: theme.colors.surface,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
 
   trendingTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
   },
 
+  discoveryTitleCopy: {
+    flex: 1,
+  },
+
+  discoveryKicker: {
+    color: theme.colors.primary,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+
   trendingSubtitle: {
-    color: '#475569',
-    fontSize: 12,
-    lineHeight: 17,
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 4,
   },
 
   trendingSpark: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#0f766e',
+    backgroundColor: theme.colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   trendingBackButton: {
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#ffffff',
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.surfaceMuted,
     borderWidth: 1,
-    borderColor: '#d7e0ec',
+    borderColor: theme.colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1375,58 +1422,74 @@ const styles = StyleSheet.create({
   },
 
   trendingBackText: {
-    color: '#1f5d86',
+    color: theme.colors.primary,
     fontSize: 12,
     fontWeight: '900',
   },
 
   trendingToggle: {
-    flexDirection: 'row',
     gap: 10,
+    marginTop: 14,
   },
 
   trendingToggleButton: {
-    flex: 1,
-    minHeight: 58,
-    borderRadius: 16,
-    backgroundColor: '#eef2fa',
+    minHeight: 74,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surfaceMuted,
     borderWidth: 1,
-    borderColor: '#d7e0ec',
+    borderColor: theme.colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-  },
-
-  activeTrendingToggleButton: {
-    backgroundColor: '#1f5d86',
-    borderColor: '#1f5d86',
-  },
-
-  trendingToggleLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
 
   trendingToggleText: {
-    color: '#0f172a',
-    fontSize: 12,
+    color: theme.colors.text,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: '900',
+  },
+
+  categoryIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  categoryIconPrimary: {
+    backgroundColor: theme.colors.primary,
+  },
+
+  categoryIconSecondary: {
+    backgroundColor: theme.colors.secondary,
+  },
+
+  categoryCopy: {
+    flex: 1,
+  },
+
+  categoryHint: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    marginTop: 2,
   },
 
   activeTrendingToggleText: {
     color: '#ffffff',
   },
 
-  discoveryCard: {
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    marginTop: 12,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: '#dbe3ee',
+  discoveryPreview: {
+    borderRadius: 14,
+    backgroundColor: theme.colors.primarySoft,
+    padding: 14,
+    marginTop: 16,
   },
 
   discoveryIconCluster: {
@@ -1442,17 +1505,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: '#ffffff',
+    borderColor: theme.colors.surface,
   },
 
   discoveryIconPrimary: {
     left: 0,
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
   },
 
   discoveryIconSecondary: {
     left: 34,
-    backgroundColor: '#0f766e',
+    backgroundColor: theme.colors.secondary,
   },
 
   discoveryIconAccent: {
@@ -1461,101 +1524,74 @@ const styles = StyleSheet.create({
   },
 
   discoveryTitle: {
-    color: '#0f172a',
-    fontSize: 17,
-    lineHeight: 22,
+    color: theme.colors.text,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: '900',
     marginBottom: 5,
   },
 
   discoveryText: {
-    color: '#475569',
+    color: theme.colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
     fontWeight: '700',
-  },
-
-  discoveryStatsRow: {
-    height: 54,
-    borderRadius: 10,
-    backgroundColor: '#eef2fa',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 14,
-  },
-
-  discoveryStat: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  discoveryStatLabel: {
-    color: '#475569',
-    fontSize: 11,
-    fontWeight: '800',
-    marginTop: 1,
-  },
-
-  discoveryDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: '#cbd5e1',
   },
 
   placeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 20,
-    marginTop: 12,
-    marginBottom: 18,
+    rowGap: 14,
+    marginBottom: 22,
   },
 
   placeCard: {
-    width: '30.5%',
-    height: 128,
-    borderRadius: 10,
+    width: '48%',
+    height: 188,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
 
   placeImage: {
     width: '100%',
-    height: 82,
+    height: 116,
   },
 
   placeImageFallback: {
     width: '100%',
-    height: 82,
-    backgroundColor: '#e8edf5',
+    height: 116,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   placeCaption: {
-    height: 46,
+    flex: 1,
     justifyContent: 'flex-start',
-    paddingHorizontal: 6,
-    paddingTop: 7,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: 10,
+    paddingTop: 9,
+    backgroundColor: theme.colors.surface,
+  },
+
+  placeBadge: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    color: theme.colors.primary,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '900',
+    marginBottom: 4,
   },
 
   placeName: {
-    color: '#111827',
-    fontSize: 13,
-    lineHeight: 15,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-
-  placeType: {
-    color: '#475569',
-    fontSize: 8,
-    lineHeight: 10,
-    fontWeight: '700',
-    textAlign: 'center',
-    minHeight: 20,
+    color: theme.colors.text,
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '900',
   },
 
   trendingStatusCard: {
@@ -1580,15 +1616,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
   },
 
   viewAllButton: {
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#1f5d86',
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
-    paddingHorizontal: 13,
+    paddingHorizontal: 16,
   },
 
   viewAllText: {
@@ -1599,14 +1635,15 @@ const styles = StyleSheet.create({
   },
 
   planCard: {
-    minHeight: 68,
-    borderRadius: 10,
+    minHeight: 92,
+    borderRadius: 16,
     backgroundColor: '#ffffff',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#dbe3ee',
   },
 
   upcomingList: {
@@ -1615,28 +1652,56 @@ const styles = StyleSheet.create({
 
   planCopy: {
     flex: 1,
-    paddingRight: 10,
+    paddingHorizontal: 12,
+  },
+
+  planIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#1f5d86',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   planTitle: {
     color: '#111827',
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 18,
+    lineHeight: 23,
     fontWeight: '900',
+    marginBottom: 5,
+  },
+
+  planMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
   },
 
   planMeta: {
-    color: '#111827',
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '600',
+    flex: 1,
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+  },
+
+  planTimePill: {
+    minWidth: 56,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#e0f2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
   },
 
   planTime: {
-    color: '#111827',
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '800',
+    color: '#1f5d86',
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '900',
   },
 
   emptyPlansCard: {

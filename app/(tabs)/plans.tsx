@@ -1,6 +1,7 @@
 import { ENV } from '@/constants/env';
 import { useAuth } from '@/contexts/auth-context';
 import { useHangoutPlans } from '@/contexts/hangout-plans-context';
+import { AppTheme, useAppTheme } from '@/contexts/theme-context';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
@@ -51,27 +52,72 @@ const ACTIVITY_OPTIONS = [
   { id: 'outdoors', label: 'Outdoor', icon: 'leaf-outline' },
 ] as const;
 
-const DATE_RANGE_OPTIONS = [
-  { id: 'today', label: 'Today', days: 1 },
-  { id: 'weekend', label: 'Weekend', days: 4 },
-  { id: 'week', label: '7 days', days: 7 },
-] as const;
-
 const DURATION_OPTIONS = [60, 90, 120, 180];
+const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+const DATE_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+
+type DayWindowOption = {
+  offset: number;
+  date: Date;
+  dayLabel: string;
+  dateLabel: string;
+};
+
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function startOfDay(date: Date) {
+  const nextDate = new Date(date);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function endOfDay(date: Date) {
+  const nextDate = new Date(date);
+  nextDate.setHours(23, 59, 59, 999);
+  return nextDate;
+}
+
+function getDayWindow(offset: number, now = new Date()) {
+  const selectedDate = addDays(now, offset);
+
+  return {
+    dateFrom: offset === 0 ? now : startOfDay(selectedDate),
+    dateTo: endOfDay(selectedDate),
+  };
+}
 
 export default function SuggestionsScreen() {
+  const { theme } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const { token } = useAuth();
   const { addPlan } = useHangoutPlans();
   const [friends, setFriends] = React.useState<Friend[]>([]);
   const [selectedFriendIds, setSelectedFriendIds] = React.useState<string[]>([]);
   const [activityType, setActivityType] = React.useState('food');
-  const [dateRangeId, setDateRangeId] = React.useState('week');
+  const [selectedDayOffset, setSelectedDayOffset] = React.useState(0);
   const [durationMinutes, setDurationMinutes] = React.useState(120);
   const [suggestions, setSuggestions] = React.useState<HangoutSuggestion[]>([]);
   const [statusMessage, setStatusMessage] = React.useState('');
   const [isLoadingFriends, setIsLoadingFriends] = React.useState(false);
   const [isFindingSuggestions, setIsFindingSuggestions] = React.useState(false);
   const [creatingSuggestionId, setCreatingSuggestionId] = React.useState<string | null>(null);
+  const [currentTime, setCurrentTime] = React.useState(() => new Date());
+  const dayWindowOptions = React.useMemo<DayWindowOption[]>(() => {
+    return Array.from({ length: 8 }, (_, offset) => {
+      const date = addDays(currentTime, offset);
+
+      return {
+        offset,
+        date,
+        dayLabel: DAY_LABEL_FORMATTER.format(date),
+        dateLabel: DATE_LABEL_FORMATTER.format(date),
+      };
+    });
+  }, [currentTime]);
 
   const apiFetch = React.useCallback(
     async (path: string, options: RequestInit = {}) => {
@@ -115,6 +161,16 @@ export default function SuggestionsScreen() {
     loadFriends();
   }, [loadFriends]);
 
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60 * 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+
   const toggleFriend = (friendId: string) => {
     setSelectedFriendIds((currentIds) =>
       currentIds.includes(friendId)
@@ -129,9 +185,7 @@ export default function SuggestionsScreen() {
       return;
     }
 
-    const selectedRange = DATE_RANGE_OPTIONS.find((option) => option.id === dateRangeId) ?? DATE_RANGE_OPTIONS[2];
-    const dateFrom = new Date();
-    const dateTo = new Date(Date.now() + selectedRange.days * 24 * 60 * 60 * 1000);
+    const { dateFrom, dateTo } = getDayWindow(selectedDayOffset);
 
     setIsFindingSuggestions(true);
     setStatusMessage('');
@@ -269,16 +323,19 @@ export default function SuggestionsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Time Window</Text>
-          <View style={styles.segmentRow}>
-            {DATE_RANGE_OPTIONS.map((option) => (
+          <View style={styles.dayGrid}>
+            {dayWindowOptions.map((option) => (
               <TouchableOpacity
-                key={option.id}
-                style={[styles.segmentButton, dateRangeId === option.id && styles.activeSegmentButton]}
-                onPress={() => setDateRangeId(option.id)}
+                key={`${option.offset}-${option.dateLabel}`}
+                style={[styles.dayButton, selectedDayOffset === option.offset && styles.activeSegmentButton]}
+                onPress={() => setSelectedDayOffset(option.offset)}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.segmentText, dateRangeId === option.id && styles.activeSegmentText]}>
-                  {option.label}
+                <Text style={[styles.dayText, selectedDayOffset === option.offset && styles.activeSegmentText]}>
+                  {option.dayLabel}
+                </Text>
+                <Text style={[styles.dayDateText, selectedDayOffset === option.offset && styles.activeDayDateText]}>
+                  {option.dateLabel}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -400,10 +457,10 @@ function formatTimeRange(start: string, end: string) {
   return `${dateLabel}, ${timeLabel}`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#a9b2bd',
+    backgroundColor: theme.colors.background,
   },
 
   content: {
@@ -413,7 +470,7 @@ const styles = StyleSheet.create({
   },
 
   heading: {
-    color: '#0f172a',
+    color: theme.colors.text,
     fontSize: 24,
     lineHeight: 30,
     fontWeight: '900',
@@ -432,7 +489,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    color: '#111827',
+    color: theme.colors.text,
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '900',
@@ -446,7 +503,7 @@ const styles = StyleSheet.create({
   friendChip: {
     minHeight: 52,
     borderRadius: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -454,35 +511,35 @@ const styles = StyleSheet.create({
   },
 
   selectedFriendChip: {
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
   },
 
   friendInitial: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#e8edf5',
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   selectedFriendInitial: {
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
   },
 
   friendInitialText: {
-    color: '#1f5d86',
+    color: theme.colors.primary,
     fontSize: 12,
     fontWeight: '900',
   },
 
   selectedFriendInitialText: {
-    color: '#1f5d86',
+    color: theme.colors.primary,
   },
 
   friendName: {
     flex: 1,
-    color: '#111827',
+    color: theme.colors.text,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -492,11 +549,11 @@ const styles = StyleSheet.create({
   },
 
   emptyText: {
-    color: '#334155',
+    color: theme.colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     borderRadius: 8,
     padding: 12,
   },
@@ -511,7 +568,7 @@ const styles = StyleSheet.create({
     width: '48.8%',
     minHeight: 48,
     borderRadius: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -519,11 +576,11 @@ const styles = StyleSheet.create({
   },
 
   selectedOptionButton: {
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
   },
 
   optionText: {
-    color: '#111827',
+    color: theme.colors.text,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -538,31 +595,65 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
+  dayGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+
+  dayButton: {
+    width: '23.2%',
+    height: 52,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   segmentButton: {
     flex: 1,
     height: 38,
     borderRadius: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   activeSegmentButton: {
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
   },
 
   segmentText: {
-    color: '#111827',
+    color: theme.colors.text,
     fontSize: 12,
     fontWeight: '900',
+  },
+
+  dayText: {
+    color: theme.colors.text,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '900',
+  },
+
+  dayDateText: {
+    color: theme.colors.textMuted,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '800',
   },
 
   activeSegmentText: {
     color: '#ffffff',
   },
 
+  activeDayDateText: {
+    color: '#ffffff',
+  },
+
   statusText: {
-    color: '#b42318',
+    color: theme.colors.danger,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '800',
@@ -572,7 +663,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     height: 52,
     borderRadius: 8,
-    backgroundColor: '#008f62',
+    backgroundColor: theme.colors.success,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -596,7 +687,7 @@ const styles = StyleSheet.create({
 
   suggestionCard: {
     borderRadius: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     padding: 14,
     gap: 9,
   },
@@ -611,21 +702,21 @@ const styles = StyleSheet.create({
     minWidth: 44,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#e8f7ef',
+    backgroundColor: theme.colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
 
   scoreText: {
-    color: '#008f62',
+    color: theme.colors.success,
     fontSize: 12,
     fontWeight: '900',
   },
 
   suggestionTitle: {
     flex: 1,
-    color: '#111827',
+    color: theme.colors.text,
     fontSize: 16,
     fontWeight: '900',
   },
@@ -638,7 +729,7 @@ const styles = StyleSheet.create({
 
   metaText: {
     flex: 1,
-    color: '#334155',
+    color: theme.colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
@@ -647,7 +738,7 @@ const styles = StyleSheet.create({
   createButton: {
     height: 42,
     borderRadius: 7,
-    backgroundColor: '#1f5d86',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,

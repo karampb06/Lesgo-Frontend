@@ -6,25 +6,33 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { AuthProvider } from '@/contexts/auth-context';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppThemeProvider, useAppTheme } from '@/contexts/theme-context';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <GestureHandlerRootView style={styles.root}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AuthProvider>
-          <Stack initialRouteName="login">
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="signup" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          </Stack>
-        </AuthProvider>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <AppThemeProvider>
+        <RootNavigator />
+      </AppThemeProvider>
     </GestureHandlerRootView>
+  );
+}
+
+function RootNavigator() {
+  const { theme } = useAppTheme();
+
+  return (
+    <ThemeProvider value={theme.mode === 'dark' ? DarkTheme : DefaultTheme}>
+      <AuthProvider>
+        <Stack initialRouteName="login">
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="signup" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        </Stack>
+      </AuthProvider>
+      <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
+    </ThemeProvider>
   );
 }
 
