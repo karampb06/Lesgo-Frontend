@@ -5,6 +5,7 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
+import { NotificationListener } from '@/components/notification-listener';
 import { AuthProvider } from '@/contexts/auth-context';
 import { AppThemeProvider, useAppTheme } from '@/contexts/theme-context';
 
@@ -24,6 +25,7 @@ function RootNavigator() {
   return (
     <ThemeProvider value={theme.mode === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
+        <NotificationListener />
         <Stack initialRouteName="login">
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="signup" options={{ headerShown: false }} />

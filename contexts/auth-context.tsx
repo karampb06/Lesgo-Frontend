@@ -1,4 +1,9 @@
-import { createContext, PropsWithChildren, useContext, useState } from 'react';
+import {
+  registerForPushNotificationsAsync,
+  subscribeToPushTokenUpdates,
+  unregisterCurrentPushTokenAsync,
+} from '@/services/push-notifications';
+import { createContext, PropsWithChildren, useContext, useEffect, useState } from 'react';
 
 export type AuthUser = {
   backendId?: string;
@@ -19,7 +24,7 @@ type AuthContextValue = {
   setUser: (user: AuthUser | null) => void;
   setSession: (user: AuthUser, token: string) => void;
   updateUser: (profile: Partial<AuthUser>) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -32,6 +37,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setUser(nextUser);
     setToken(nextToken);
   };
+
+  useEffect(() => {
+    if (!token) {
+      return undefined;
+    }
+
+    registerForPushNotificationsAsync(token).catch((error) => {
+      console.warn('Push notification registration failed:', error);
+    });
+
+    const subscription = subscribeToPushTokenUpdates(token);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [token]);
 
   const updateUser = (profile: Partial<AuthUser>) => {
     setUser((currentUser) => {
@@ -46,7 +67,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await unregisterCurrentPushTokenAsync(token);
+    } catch (error) {
+      console.warn('Push notification token removal failed:', error);
+    }
+
     setUser(null);
     setToken(null);
   };

@@ -98,7 +98,7 @@ export default function ProfileScreen() {
     } catch (error) {
       console.warn('Google logout failed:', error);
     } finally {
-      logout();
+      await logout();
       router.replace('/login');
     }
   };

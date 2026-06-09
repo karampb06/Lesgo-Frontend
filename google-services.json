@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1078671887691",
+    "project_id": "lesgo-ff959",
+    "storage_bucket": "lesgo-ff959.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1078671887691:android:ede57235a078d93116ecce",
+        "android_client_info": {
+          "package_name": "lesgo.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXsixi-QAkGo05-nbn29GJHrhFn-Uo-9k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
