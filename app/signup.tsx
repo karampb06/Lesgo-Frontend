@@ -1,7 +1,8 @@
 import { ENV } from '@/constants/env';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useAuth } from '@/contexts/auth-context';
 
 import GoogleLogin from './GoogleLogin';
 
@@ -23,8 +25,15 @@ export const unstable_settings = {
 
 export default function SignupScreen() {
   const router = useRouter();
+  const { user, token, isRestoringSession } = useAuth();
   const [homeArea, setHomeArea] = useState('');
   const [locationError, setLocationError] = useState('');
+
+  useEffect(() => {
+    if (!isRestoringSession && user && token) {
+      router.replace('/(tabs)/homepage');
+    }
+  }, [isRestoringSession, router, token, user]);
 
   const handleLogin = () => {
     router.replace('/login');
@@ -50,6 +59,16 @@ export default function SignupScreen() {
 
     return data;
   };
+
+  if (isRestoringSession || (user && token)) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={[styles.container, styles.restoringContainer]}>
+          <ActivityIndicator color="#1b4f7d" />
+        </ThemedView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -141,6 +160,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#eef3fd',
     paddingHorizontal: 20,
+  },
+
+  restoringContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   keyboardView: {
