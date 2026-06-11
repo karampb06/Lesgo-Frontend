@@ -29,6 +29,8 @@ type UserSummary = {
 type Friendship = {
   id: string;
   status: string;
+  blockedBy?: string | null;
+  blockedAt?: string;
   friend?: UserSummary;
   requester?: UserSummary;
 };
@@ -51,6 +53,7 @@ type ChatRow = {
   friend?: UserSummary;
   updatedAt?: string;
   type: 'direct' | 'group';
+  isBlocked?: boolean;
 };
 
 // Lists all chats so the user can open the right conversation.
@@ -61,12 +64,16 @@ export default function MessagesScreen() {
   const { token, user } = useAuth();
   const [friendCode, setFriendCode] = React.useState('');
   const [friends, setFriends] = React.useState<Friendship[]>([]);
+  const [blockedFriends, setBlockedFriends] = React.useState<Friendship[]>([]);
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [statusMessage, setStatusMessage] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [blockingFriendshipId, setBlockingFriendshipId] = React.useState<string | null>(null);
+  const [unblockingFriendshipId, setUnblockingFriendshipId] = React.useState<string | null>(null);
   const [isAddFriendVisible, setIsAddFriendVisible] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<'all' | 'groups'>('all');
+  const [actionRow, setActionRow] = React.useState<ChatRow | null>(null);
+  const [blockConfirmRow, setBlockConfirmRow] = React.useState<ChatRow | null>(null);
+  const [activeTab, setActiveTab] = React.useState<'all' | 'groups' | 'blocked'>('all');
 
   const apiFetch = React.useCallback(
     async (path: string, options: RequestInit = {}) => {
@@ -96,13 +103,15 @@ export default function MessagesScreen() {
 
     setIsLoading(true);
     try {
-      const [friendsData, conversationsData] = await Promise.all([
+      const [friendsData, conversationsData, blockedFriendsData] = await Promise.all([
         apiFetch('/social/friends'),
         apiFetch('/social/conversations'),
+        apiFetch('/social/friends/blocked'),
       ]);
 
       setFriends(friendsData.friends ?? []);
       setConversations(conversationsData.conversations ?? []);
+      setBlockedFriends(blockedFriendsData.friends ?? []);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Could not load chats');
     } finally {
@@ -176,6 +185,18 @@ export default function MessagesScreen() {
     return map;
   }, [friends]);
 
+  const friendshipByBlockedFriendId = React.useMemo(() => {
+    const map = new Map<string, Friendship>();
+
+    blockedFriends.forEach((friendship) => {
+      if (friendship.friend?.id) {
+        map.set(friendship.friend.id, friendship);
+      }
+    });
+
+    return map;
+  }, [blockedFriends]);
+
   const chatRows = React.useMemo(() => {
     const conversationRows: ChatRow[] = conversations.map((conversation) => {
       const friend = conversation.type === 'direct' ? getConversationFriend(conversation) : undefined;
@@ -222,9 +243,31 @@ export default function MessagesScreen() {
         type: 'direct',
       }));
 
-    const visibleRows = [...conversationRows, ...friendRows].filter((row) =>
-      activeTab === 'groups' ? row.type === 'group' : row.type === 'direct'
-    );
+    const blockedRows: ChatRow[] = blockedFriends
+      .map((friendship) => friendship.friend)
+      .filter((friend): friend is UserSummary => Boolean(friend))
+      .map((friend) => {
+        const friendship = friendshipByBlockedFriendId.get(friend.id);
+
+        return {
+          id: `blocked-${friend.id}`,
+          title: friend.name,
+          subtitle: 'Blocked',
+          initials: getInitials(friend.name),
+          friendshipId: friendship?.id,
+          friend,
+          type: 'direct',
+          isBlocked: true,
+          updatedAt: friendship?.blockedAt,
+        };
+      });
+
+    const visibleRows =
+      activeTab === 'blocked'
+        ? blockedRows
+        : [...conversationRows, ...friendRows].filter((row) =>
+            activeTab === 'groups' ? row.type === 'group' : row.type === 'direct'
+          );
 
     return visibleRows.sort((first, second) => {
       const firstDate = first.updatedAt ? new Date(first.updatedAt).getTime() : 0;
@@ -232,9 +275,14 @@ export default function MessagesScreen() {
 
       return secondDate - firstDate;
     });
-  }, [activeTab, conversations, friendshipByFriendId, getConversationFriend, user?.backendId]);
+  }, [activeTab, blockedFriends, conversations, friends, friendshipByBlockedFriendId, friendshipByFriendId, getConversationFriend, user?.backendId]);
 
   const openChatRow = (row: ChatRow) => {
+    if (row.isBlocked) {
+      setStatusMessage('Unblock this person before starting a chat.');
+      return;
+    }
+
     if (row.conversationId) {
       router.push({
         pathname: '/(tabs)/chat',
@@ -258,6 +306,8 @@ export default function MessagesScreen() {
     }
 
     setBlockingFriendshipId(row.friendshipId);
+    setBlockConfirmRow(null);
+    setActionRow(null);
     setStatusMessage('');
 
     try {
@@ -272,15 +322,43 @@ export default function MessagesScreen() {
   };
 
   const confirmBlockFriend = (row: ChatRow) => {
+    setActionRow(null);
+    setBlockConfirmRow(row);
+  };
+
+  const openFriendActions = (row: ChatRow) => {
+    setActionRow(row);
+  };
+
+  const unblockFriendship = async (row: ChatRow) => {
+    if (!row.friendshipId) {
+      setStatusMessage('Could not find this blocked friendship.');
+      return;
+    }
+
+    setUnblockingFriendshipId(row.friendshipId);
+    setStatusMessage('');
+
+    try {
+      await apiFetch(`/social/friends/${row.friendshipId}/unblock`, { method: 'POST' });
+      setStatusMessage(`${row.title} has been unblocked.`);
+      await loadSocialData();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not unblock friend');
+    } finally {
+      setUnblockingFriendshipId(null);
+    }
+  };
+
+  const confirmUnblockFriend = (row: ChatRow) => {
     Alert.alert(
-      'Block friend?',
-      `You and ${row.title} will no longer be able to start or continue a direct chat.`,
+      'Unblock friend?',
+      `You and ${row.title} will be able to chat again.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Block',
-          style: 'destructive',
-          onPress: () => blockFriendship(row),
+          text: 'Unblock',
+          onPress: () => unblockFriendship(row),
         },
       ]
     );
@@ -319,6 +397,15 @@ export default function MessagesScreen() {
               GROUP CHATS
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentButton, activeTab === 'blocked' && styles.activeSegmentButton]}
+            onPress={() => setActiveTab('blocked')}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.segmentText, activeTab === 'blocked' && styles.activeSegmentText]}>
+              BLOCKED
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
@@ -341,19 +428,32 @@ export default function MessagesScreen() {
                       <Text style={styles.rowTitle}>{row.title}</Text>
                       <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color="#64748b" />
+                    {row.isBlocked ? null : <Ionicons name="chevron-forward" size={18} color="#64748b" />}
                   </TouchableOpacity>
-                  {row.type === 'direct' && row.friendshipId ? (
+                  {row.isBlocked && row.friendshipId ? (
                     <TouchableOpacity
-                      style={styles.blockButton}
-                      onPress={() => confirmBlockFriend(row)}
+                      style={[styles.blockButton, styles.unblockButton]}
+                      onPress={() => confirmUnblockFriend(row)}
+                      disabled={unblockingFriendshipId === row.friendshipId}
+                      activeOpacity={0.85}
+                    >
+                      {unblockingFriendshipId === row.friendshipId ? (
+                        <ActivityIndicator color="#059669" size="small" />
+                      ) : (
+                        <Ionicons name="checkmark-circle-outline" size={19} color="#059669" />
+                      )}
+                    </TouchableOpacity>
+                  ) : row.type === 'direct' && row.friendshipId ? (
+                    <TouchableOpacity
+                      style={styles.moreButton}
+                      onPress={() => openFriendActions(row)}
                       disabled={blockingFriendshipId === row.friendshipId}
                       activeOpacity={0.85}
                     >
                       {blockingFriendshipId === row.friendshipId ? (
                         <ActivityIndicator color={theme.colors.danger} size="small" />
                       ) : (
-                        <Ionicons name="ban-outline" size={18} color={theme.colors.danger} />
+                        <Ionicons name="ellipsis-horizontal" size={20} color={theme.colors.textMuted} />
                       )}
                     </TouchableOpacity>
                   ) : null}
@@ -362,10 +462,16 @@ export default function MessagesScreen() {
             ) : (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>
-                  {activeTab === 'groups' ? 'No group chats yet' : 'No chats yet'}
+                  {activeTab === 'blocked'
+                    ? 'No blocked friends'
+                    : activeTab === 'groups'
+                      ? 'No group chats yet'
+                      : 'No chats yet'}
                 </Text>
                 <Text style={styles.emptyText}>
-                  {activeTab === 'groups'
+                  {activeTab === 'blocked'
+                    ? 'People you block will appear here.'
+                    : activeTab === 'groups'
                     ? 'Create a hangout plan to start a separate group chat.'
                     : 'Tap + to add a friend.'}
                 </Text>
@@ -373,6 +479,73 @@ export default function MessagesScreen() {
             )}
         </ScrollView>
       </View>
+
+      <Modal
+        visible={Boolean(actionRow)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionRow(null)}
+      >
+        <TouchableOpacity
+          style={styles.popoverBackdrop}
+          activeOpacity={1}
+          onPress={() => setActionRow(null)}
+        >
+          <TouchableOpacity style={styles.actionPopover} activeOpacity={1}>
+            <TouchableOpacity
+              style={styles.popoverAction}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (actionRow) {
+                  confirmBlockFriend(actionRow);
+                }
+              }}
+            >
+              <Ionicons name="ban-outline" size={19} color={theme.colors.danger} />
+              <Text style={[styles.popoverActionText, styles.popoverDangerText]}>Block friend</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={Boolean(blockConfirmRow)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBlockConfirmRow(null)}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmPanel}>
+            <View style={styles.confirmIcon}>
+              <Ionicons name="ban-outline" size={24} color={theme.colors.danger} />
+            </View>
+            <Text style={styles.confirmTitle}>Block {blockConfirmRow?.title}?</Text>
+            <Text style={styles.confirmText}>
+              Direct messages will be disabled until you unblock this friend.
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmCancelButton}
+                activeOpacity={0.85}
+                onPress={() => setBlockConfirmRow(null)}
+              >
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmBlockButton}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (blockConfirmRow) {
+                    blockFriendship(blockConfirmRow);
+                  }
+                }}
+              >
+                <Text style={styles.confirmBlockText}>Block</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={isAddFriendVisible}
@@ -481,7 +654,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   },
 
   segmentedControl: {
-    width: 172,
+    width: 258,
     height: 34,
     borderRadius: 17,
     backgroundColor: theme.colors.surface,
@@ -552,6 +725,19 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+  },
+
+  moreButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+
+  unblockButton: {
+    borderColor: '#86efac',
   },
 
   avatar: {
@@ -632,6 +818,129 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.45)',
     justifyContent: 'center',
     paddingHorizontal: 18,
+  },
+
+  popoverBackdrop: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+
+  actionPopover: {
+    position: 'absolute',
+    top: 214,
+    right: 24,
+    width: 190,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surface,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+  },
+
+  popoverAction: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+
+  popoverActionText: {
+    flex: 1,
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  popoverDangerText: {
+    color: theme.colors.danger,
+  },
+
+  confirmBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.36)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+
+  confirmPanel: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surface,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+
+  confirmIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+
+  confirmTitle: {
+    color: theme.colors.text,
+    fontSize: 17,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+
+  confirmText: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    width: '100%',
+  },
+
+  confirmCancelButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  confirmBlockButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 8,
+    backgroundColor: theme.colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  confirmCancelText: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  confirmBlockText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
   },
 
   modalPanel: {
