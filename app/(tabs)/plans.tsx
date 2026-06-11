@@ -53,6 +53,12 @@ const ACTIVITY_OPTIONS = [
   { id: 'outdoors', label: 'Outdoor', icon: 'leaf-outline' },
 ] as const;
 
+const SEARCH_RADIUS_OPTIONS = [
+  { meters: 5000, label: '5km' },
+  { meters: 10000, label: '10km' },
+  { meters: 15000, label: '15km' },
+  { meters: 25000, label: '25km' },
+] as const;
 const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
 const DATE_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
 
@@ -122,6 +128,8 @@ export default function SuggestionsScreen() {
   const [endTime, setEndTime] = React.useState(() => formatInputTime(addHours(new Date(), 2)));
   const [isTimePickerVisible, setIsTimePickerVisible] = React.useState(false);
   const [activeTimeField, setActiveTimeField] = React.useState<'start' | 'end'>('start');
+  const [searchRadiusMeters, setSearchRadiusMeters] = React.useState(5000);
+  const [activeSuggestionRadiusMeters, setActiveSuggestionRadiusMeters] = React.useState<number | null>(null);
   const [suggestions, setSuggestions] = React.useState<HangoutSuggestion[]>([]);
   const [statusMessage, setStatusMessage] = React.useState('');
   const [isLoadingFriends, setIsLoadingFriends] = React.useState(false);
@@ -247,10 +255,12 @@ export default function SuggestionsScreen() {
           // The backend still expects duration, so calculate it from the chosen times.
           durationMinutes: Math.round((dateTo.getTime() - dateFrom.getTime()) / 60000),
           activityType,
+          searchRadiusMeters,
         }),
       });
 
       setSuggestions(data.suggestions ?? []);
+      setActiveSuggestionRadiusMeters(data.searchRadiusMeters ?? searchRadiusMeters);
 
       if (!data.suggestions?.length) {
         setStatusMessage('No common free time found in that range. Try a wider range.');
@@ -420,6 +430,28 @@ export default function SuggestionsScreen() {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Search Radius</Text>
+          <View style={styles.segmentRow}>
+            {SEARCH_RADIUS_OPTIONS.map((option) => {
+              const isSelected = searchRadiusMeters === option.meters;
+
+              return (
+                <TouchableOpacity
+                  key={option.meters}
+                  style={[styles.segmentButton, isSelected && styles.activeSegmentButton]}
+                  onPress={() => setSearchRadiusMeters(option.meters)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.segmentText, isSelected && styles.activeSegmentText]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
 
         <TouchableOpacity
@@ -440,7 +472,9 @@ export default function SuggestionsScreen() {
 
         {suggestions.length ? (
           <View style={styles.results}>
-            <Text style={styles.sectionTitle}>Suggested Plans</Text>
+            <Text style={styles.sectionTitle}>
+              Suggested Plans{activeSuggestionRadiusMeters ? ` within ${formatRadius(activeSuggestionRadiusMeters)}` : ''}
+            </Text>
             {suggestions.map((suggestion) => (
               <View key={suggestion.id} style={styles.suggestionCard}>
                 <View style={styles.suggestionTopRow}>
@@ -526,6 +560,14 @@ function formatTimeRange(start: string, end: string) {
   })}`;
 
   return `${dateLabel}, ${timeLabel}`;
+}
+
+function formatRadius(radiusMeters: number) {
+  if (radiusMeters >= 1000) {
+    return `${Math.round((radiusMeters / 1000) * 10) / 10}km`;
+  }
+
+  return `${radiusMeters}m`;
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({

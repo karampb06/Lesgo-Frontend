@@ -193,7 +193,7 @@ export default function GoogleLogin({
           throw new Error("Backend did not return a complete auth session.");
         }
 
-        setSession(
+        await setSession(
           {
             backendId: savedUser._id,
             id: savedUser?.googleId ?? user.id,

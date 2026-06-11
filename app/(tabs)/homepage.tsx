@@ -1,3 +1,4 @@
+import { showLocalNotification } from '@/services/push-notifications';
 import { Ionicons } from '@expo/vector-icons';
 import { ENV } from '@/constants/env';
 import { TimeClockPicker, formatTimeDisplay } from '@/components/time-clock-picker';
@@ -64,6 +65,16 @@ type PlanInvite = {
   };
 };
 
+type NotificationItem = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  createdAt?: string;
+  planId?: string;
+  conversationId?: string;
+};
+
 export default function HomePage() {
   const router = useRouter();
   const { theme } = useAppTheme();
@@ -78,6 +89,7 @@ export default function HomePage() {
   const [friendRequests, setFriendRequests] = React.useState<FriendRequest[]>([]);
   const [friends, setFriends] = React.useState<Friend[]>([]);
   const [planInvites, setPlanInvites] = React.useState<PlanInvite[]>([]);
+  const [updates, setUpdates] = React.useState<NotificationItem[]>([]);
   const [trendingPlaces, setTrendingPlaces] = React.useState<TrendingPlace[]>([]);
   const [activityPlaces, setActivityPlaces] = React.useState<TrendingPlace[]>([]);
   const [activeTrendingSection, setActiveTrendingSection] = React.useState<'places' | 'activities' | null>(null);
@@ -103,7 +115,7 @@ export default function HomePage() {
   const [isNotificationsVisible, setIsNotificationsVisible] = React.useState(false);
   const [notificationMessage, setNotificationMessage] = React.useState('');
   const [isNotificationActionLoading, setIsNotificationActionLoading] = React.useState(false);
-  const notificationCount = friendRequests.length + planInvites.length;
+  const notificationCount = friendRequests.length + planInvites.length + updates.length;
   const activePlanTime = activeTimeField === 'start' ? planTime : planEndTime;
   const updateActivePlanTime = React.useCallback(
     (nextTime: string) => {
@@ -343,6 +355,12 @@ export default function HomePage() {
 
       const invitedCount = data.invitedCount ?? selectedPlaceFriendIds.length;
 
+      await showLocalNotification(
+        'Plan Invite Sent! 📅',
+        `Invite for ${selectedPlace.name} sent to ${invitedCount} friend(s).`,
+        { type: 'plan_created', planId: createdPlan?.id }
+      );
+
       setAddPlaceMessage(`Plan invite sent to ${invitedCount} friend(s). Check their home notifications.`);
       Alert.alert('Invite Sent', `Plan invite sent to ${invitedCount} friend(s).`);
       setSelectedPlaceFriendIds([]);
@@ -358,12 +376,14 @@ export default function HomePage() {
     if (!token) {
       setFriendRequests([]);
       setPlanInvites([]);
+      setUpdates([]);
       return;
     }
 
     try {
       const requestsData = await apiFetch('/social/friends/requests');
       let invitesData = { invites: [] };
+      let notificationsData = { notifications: [] };
 
       try {
         invitesData = await apiFetch('/suggestions/plan-invites');
@@ -371,13 +391,25 @@ export default function HomePage() {
         console.warn('Plan invite notification load failed:', error);
       }
 
+      try {
+        notificationsData = await apiFetch('/notifications');
+      } catch (error) {
+        console.warn('Generic notification load failed:', error);
+      }
+
+      const genericUpdates = normalizeNotifications(notificationsData).filter(
+        (notification) => !['friend_request', 'plan_invite'].includes(notification.type)
+      );
+
       console.log('Home Notifications Loaded:', {
         friendRequests: requestsData.requests?.length ?? 0,
         planInvites: invitesData.invites?.length ?? 0,
+        updates: genericUpdates.length,
       });
 
       setFriendRequests(requestsData.requests ?? []);
       setPlanInvites(normalizePlanInvites(invitesData));
+      setUpdates(genericUpdates);
     } catch (error) {
       console.warn('Notification load failed:', error);
       setNotificationMessage(error instanceof Error ? error.message : 'Could not load notifications.');
@@ -418,6 +450,7 @@ export default function HomePage() {
 
     try {
       await apiFetch(`/social/friends/${requestId}/accept`, { method: 'POST' });
+      await showLocalNotification('Friendship Confirmed! 🤝', 'You are now friends.');
       setNotificationMessage('Friend request accepted.');
       await loadNotifications();
     } catch (error) {
@@ -433,10 +466,28 @@ export default function HomePage() {
 
     try {
       await apiFetch(`/suggestions/plans/${planId}/accept`, { method: 'POST' });
+      await showLocalNotification('Plan Joined! ✅', 'See you there!');
       setNotificationMessage('Plan invite accepted.');
       await Promise.all([loadNotifications(), refreshPlans()]);
     } catch (error) {
       setNotificationMessage(error instanceof Error ? error.message : 'Could not accept plan invite.');
+    } finally {
+      setIsNotificationActionLoading(false);
+    }
+  };
+
+  const removeNotification = async (notificationId: string) => {
+    const previousUpdates = updates;
+    setUpdates((currentUpdates) => currentUpdates.filter((notification) => notification.id !== notificationId));
+    setIsNotificationActionLoading(true);
+    setNotificationMessage('');
+
+    try {
+      await apiFetch(`/notifications/${notificationId}`, { method: 'DELETE' });
+      setNotificationMessage('Notification removed.');
+    } catch (error) {
+      setUpdates(previousUpdates);
+      setNotificationMessage(error instanceof Error ? error.message : 'Could not remove notification.');
     } finally {
       setIsNotificationActionLoading(false);
     }
@@ -451,6 +502,25 @@ export default function HomePage() {
       pathname: '/(tabs)/viewhangoutplan',
       params: { planId },
     });
+  };
+
+  const openNotification = (notification: NotificationItem) => {
+    if (notification.conversationId) {
+      router.push({
+        pathname: '/(tabs)/chat',
+        params: {
+          conversationId: notification.conversationId,
+          title: notification.title.replace(/^New message from\s+/i, '') || 'Chat',
+        },
+      });
+      setIsNotificationsVisible(false);
+      return;
+    }
+
+    if (notification.planId) {
+      openPlanDetails(notification.planId);
+      setIsNotificationsVisible(false);
+    }
   };
 
   return (
@@ -695,54 +765,97 @@ export default function HomePage() {
             {notificationMessage ? <Text style={styles.notificationStatus}>{notificationMessage}</Text> : null}
             {isNotificationActionLoading ? <ActivityIndicator color="#1f5d86" /> : null}
 
-            <Text style={styles.modalSectionTitle}>Friend Requests</Text>
-            {friendRequests.length ? (
-              friendRequests.map((request) => (
-                <View key={request.id} style={styles.notificationRow}>
-                  <View style={styles.notificationCopy}>
-                    <Text style={styles.notificationTitle}>
-                      {request.requester?.name ?? 'New friend request'}
-                    </Text>
-                    <Text style={styles.notificationSubtitle}>{request.requester?.friendCode}</Text>
+            <ScrollView
+              style={styles.notificationScroll}
+              contentContainerStyle={styles.notificationScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalSectionTitle}>Friend Requests</Text>
+              {friendRequests.length ? (
+                friendRequests.map((request) => (
+                  <View key={request.id} style={styles.notificationRow}>
+                    <View style={styles.notificationCopy}>
+                      <Text style={styles.notificationTitle}>
+                        {request.requester?.name ?? 'New friend request'}
+                      </Text>
+                      <Text style={styles.notificationSubtitle}>{request.requester?.friendCode}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.acceptButton}
+                      onPress={() => acceptFriendRequest(request.id)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.acceptButtonText}>Accept</Text>
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    style={styles.acceptButton}
-                    onPress={() => acceptFriendRequest(request.id)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.acceptButtonText}>Accept</Text>
-                  </TouchableOpacity>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.modalEmptyText}>No friend requests</Text>
-            )}
+                ))
+              ) : (
+                <Text style={styles.modalEmptyText}>No friend requests</Text>
+              )}
 
-            <Text style={styles.modalSectionTitle}>Plan Invites</Text>
-            {planInvites.length ? (
-              planInvites.map((invite) => (
-                <View key={invite.id} style={styles.notificationRow}>
-                  <View style={styles.notificationCopy}>
-                    <Text style={styles.notificationTitle}>{invite.title}</Text>
-                    <Text style={styles.notificationSubtitle}>
-                      {invite.dateTimeLabel} - {invite.location}
-                    </Text>
-                    <Text style={styles.notificationSubtitle}>
-                      From {invite.creator?.name ?? 'Friend'}
-                    </Text>
+              <Text style={styles.modalSectionTitle}>Plan Invites</Text>
+              {planInvites.length ? (
+                planInvites.map((invite) => (
+                  <View key={invite.id} style={styles.notificationRow}>
+                    <View style={styles.notificationCopy}>
+                      <Text style={styles.notificationTitle}>{invite.title}</Text>
+                      <Text style={styles.notificationSubtitle}>
+                        {invite.dateTimeLabel} - {invite.location}
+                      </Text>
+                      <Text style={styles.notificationSubtitle}>
+                        From {invite.creator?.name ?? 'Friend'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.acceptButton}
+                      onPress={() => acceptPlanInvite(invite.id)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.acceptButtonText}>Accept</Text>
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    style={styles.acceptButton}
-                    onPress={() => acceptPlanInvite(invite.id)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.acceptButtonText}>Accept</Text>
-                  </TouchableOpacity>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.modalEmptyText}>No plan invites</Text>
-            )}
+                ))
+              ) : (
+                <Text style={styles.modalEmptyText}>No plan invites</Text>
+              )}
+
+              <Text style={styles.modalSectionTitle}>Updates</Text>
+              {updates.length ? (
+                updates.map((notification) => (
+                  <View key={notification.id} style={styles.notificationRow}>
+                    <TouchableOpacity
+                      style={styles.notificationMainAction}
+                      onPress={() => openNotification(notification)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.notificationCopy}>
+                        <Text style={styles.notificationTitle}>{notification.title}</Text>
+                        <Text style={styles.notificationSubtitle}>{notification.message}</Text>
+                        {notification.createdAt ? (
+                          <Text style={styles.notificationSubtitle}>
+                            {new Date(notification.createdAt).toLocaleString([], {
+                              weekday: 'short',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.removeNotificationButton}
+                      onPress={() => removeNotification(notification.id)}
+                      disabled={isNotificationActionLoading}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="trash-outline" size={17} color="#64748b" />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.modalEmptyText}>No updates</Text>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1135,6 +1248,22 @@ function normalizePlanInvites(data: any): PlanInvite[] {
       };
     })
     .filter(Boolean) as PlanInvite[];
+}
+
+function normalizeNotifications(data: any): NotificationItem[] {
+  const rawNotifications = Array.isArray(data?.notifications) ? data.notifications : [];
+
+  return rawNotifications
+    .filter((notification: any) => notification?.id && notification?.type)
+    .map((notification: any) => ({
+      id: String(notification.id),
+      type: String(notification.type),
+      title: String(notification.title || 'Notification'),
+      message: String(notification.message || ''),
+      createdAt: notification.createdAt ? String(notification.createdAt) : undefined,
+      planId: notification.planId ? String(notification.planId) : undefined,
+      conversationId: notification.conversationId ? String(notification.conversationId) : undefined,
+    }));
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
@@ -1591,6 +1720,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#ffffff',
     padding: 16,
+    overflow: 'hidden',
   },
 
   placeDetailsPanel: {
@@ -2054,6 +2184,15 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     marginBottom: 6,
   },
 
+  notificationScroll: {
+    flexShrink: 1,
+    maxHeight: '88%',
+  },
+
+  notificationScrollContent: {
+    paddingBottom: 4,
+  },
+
   notificationRow: {
     minHeight: 64,
     borderRadius: 8,
@@ -2063,6 +2202,13 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 9,
     marginBottom: 8,
+  },
+
+  notificationMainAction: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 46,
   },
 
   notificationCopy: {
@@ -2081,6 +2227,16 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
+  },
+
+  removeNotificationButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#dce5f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
   },
 
   notificationStatus: {

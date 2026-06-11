@@ -1,5 +1,7 @@
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,16 +13,34 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useAuth } from '@/contexts/auth-context';
 
 import GoogleLogin from './GoogleLogin';
 
 // Simple login screen. GoogleLogin handles the actual account picker and backend login.
 export default function LoginScreen() {
   const router = useRouter();
+  const { user, token, isRestoringSession } = useAuth();
+
+  useEffect(() => {
+    if (!isRestoringSession && user && token) {
+      router.replace('/(tabs)/homepage');
+    }
+  }, [isRestoringSession, router, token, user]);
 
   const handleSignup = () => {
     router.replace('/signup');
   };
+
+  if (isRestoringSession || (user && token)) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={[styles.container, styles.restoringContainer]}>
+          <ActivityIndicator color="#1b4f7d" />
+        </ThemedView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -79,6 +99,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#eef3fd',
     paddingHorizontal: 20,
+  },
+
+  restoringContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   keyboardView: {

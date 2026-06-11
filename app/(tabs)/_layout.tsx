@@ -2,7 +2,7 @@ import { HangoutPlansProvider } from '@/contexts/hangout-plans-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/contexts/auth-context';
 import { AppTheme, useAppTheme } from '@/contexts/theme-context';
@@ -35,8 +35,18 @@ function TabIcon({
 }
 
 export default function TabLayout() {
-  const { user, token } = useAuth();
+  const { user, token, isRestoringSession } = useAuth();
   const { theme } = useAppTheme();
+
+  if (isRestoringSession) {
+    const styles = createStyles(theme);
+
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator color={theme.colors.primary} />
+      </View>
+    );
+  }
 
   if (!user || !token) {
     // Keep private tabs closed until the user has a real session.
@@ -151,6 +161,13 @@ export default function TabLayout() {
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   activeIcon: {
     width: 44,
     height: 44,

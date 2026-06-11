@@ -5,6 +5,7 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
+import { NotificationListener } from '@/components/notification-listener';
 import { AuthProvider } from '@/contexts/auth-context';
 import { AppThemeProvider, useAppTheme } from '@/contexts/theme-context';
 
@@ -26,6 +27,7 @@ function RootNavigator() {
     <ThemeProvider value={theme.mode === 'dark' ? DarkTheme : DefaultTheme}>
       {/* AuthProvider sits here so login, signup, and tabs can all share the session. */}
       <AuthProvider>
+        <NotificationListener />
         <Stack initialRouteName="login">
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="signup" options={{ headerShown: false }} />

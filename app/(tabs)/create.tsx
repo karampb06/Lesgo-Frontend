@@ -33,6 +33,10 @@ type AgentPlan = {
 };
 
 // Older AI suggestions screen. The newer smart planning flow lives in plans.tsx.
+const RADIUS_PROMPTS = [
+  { label: 'Widen search', message: 'Increase search radius' },
+  { label: 'Within 10km', message: 'Search within 10km' },
+];
 export default function AiSuggestionsScreen() {
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
@@ -117,8 +121,8 @@ export default function AiSuggestionsScreen() {
     });
   };
 
-  const sendMessage = async () => {
-    const trimmedInput = input.trim();
+  const sendMessage = async (messageOverride?: string) => {
+    const trimmedInput = (messageOverride ?? input).trim();
 
     if (!trimmedInput || isSending) {
       return;
@@ -136,7 +140,9 @@ export default function AiSuggestionsScreen() {
     };
 
     setMessages((currentMessages) => [...currentMessages, userMessage]);
-    setInput('');
+    if (!messageOverride) {
+      setInput('');
+    }
     setIsSending(true);
     setStatusMessage('');
 
@@ -221,6 +227,21 @@ export default function AiSuggestionsScreen() {
 
         {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
 
+        <View style={styles.promptRow}>
+          {RADIUS_PROMPTS.map((prompt) => (
+            <TouchableOpacity
+              key={prompt.label}
+              style={[styles.promptChip, isSending && styles.disabledButton]}
+              onPress={() => sendMessage(prompt.message)}
+              disabled={isSending}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="scan-outline" size={15} color={theme.colors.primary} />
+              <Text style={styles.promptChipText}>{prompt.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <View style={styles.composer}>
           <TextInput
             value={input}
@@ -233,7 +254,7 @@ export default function AiSuggestionsScreen() {
           />
           <TouchableOpacity
             style={[styles.sendButton, (!input.trim() || isSending) && styles.disabledButton]}
-            onPress={sendMessage}
+            onPress={() => sendMessage()}
             disabled={!input.trim() || isSending}
             activeOpacity={0.85}
           >
@@ -347,6 +368,36 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 18,
     paddingBottom: 8,
+  },
+
+  promptRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
+    backgroundColor: theme.colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+
+  promptChip: {
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+
+  promptChipText: {
+    color: theme.colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
   },
 
   composer: {

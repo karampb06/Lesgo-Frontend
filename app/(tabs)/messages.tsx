@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -45,6 +46,7 @@ type ChatRow = {
   title: string;
   subtitle: string;
   initials: string;
+  friendshipId?: string;
   conversationId?: string;
   friend?: UserSummary;
   updatedAt?: string;
@@ -62,6 +64,7 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [statusMessage, setStatusMessage] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
+  const [blockingFriendshipId, setBlockingFriendshipId] = React.useState<string | null>(null);
   const [isAddFriendVisible, setIsAddFriendVisible] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'all' | 'groups'>('all');
 
@@ -161,9 +164,22 @@ export default function MessagesScreen() {
     [user?.backendId]
   );
 
+  const friendshipByFriendId = React.useMemo(() => {
+    const map = new Map<string, Friendship>();
+
+    friends.forEach((friendship) => {
+      if (friendship.friend?.id) {
+        map.set(friendship.friend.id, friendship);
+      }
+    });
+
+    return map;
+  }, [friends]);
+
   const chatRows = React.useMemo(() => {
     const conversationRows: ChatRow[] = conversations.map((conversation) => {
       const friend = conversation.type === 'direct' ? getConversationFriend(conversation) : undefined;
+      const friendship = friend ? friendshipByFriendId.get(friend.id) : undefined;
       const groupParticipants = conversation.participants
         .filter((participant) => participant.id !== user?.backendId)
         .map((participant) => participant.name);
@@ -183,7 +199,9 @@ export default function MessagesScreen() {
               ? new Date(conversation.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : 'Tap to continue',
         initials: getInitials(title),
+        friendshipId: friendship?.id,
         conversationId: conversation.id,
+        friend,
         updatedAt: conversation.updatedAt,
         type: conversation.type,
       };
@@ -199,6 +217,7 @@ export default function MessagesScreen() {
         title: friend.name,
         subtitle: friend.friendCode ?? 'Start a chat',
         initials: getInitials(friend.name),
+        friendshipId: friendshipByFriendId.get(friend.id)?.id,
         friend,
         type: 'direct',
       }));
@@ -213,7 +232,7 @@ export default function MessagesScreen() {
 
       return secondDate - firstDate;
     });
-  }, [activeTab, conversations, friends, getConversationFriend, user?.backendId]);
+  }, [activeTab, conversations, friendshipByFriendId, getConversationFriend, user?.backendId]);
 
   const openChatRow = (row: ChatRow) => {
     if (row.conversationId) {
@@ -230,6 +249,41 @@ export default function MessagesScreen() {
     if (row.friend) {
       startChat(row.friend);
     }
+  };
+
+  const blockFriendship = async (row: ChatRow) => {
+    if (!row.friendshipId) {
+      setStatusMessage('Could not find this friendship.');
+      return;
+    }
+
+    setBlockingFriendshipId(row.friendshipId);
+    setStatusMessage('');
+
+    try {
+      await apiFetch(`/social/friends/${row.friendshipId}/block`, { method: 'POST' });
+      setStatusMessage(`${row.title} has been blocked.`);
+      await loadSocialData();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not block friend');
+    } finally {
+      setBlockingFriendshipId(null);
+    }
+  };
+
+  const confirmBlockFriend = (row: ChatRow) => {
+    Alert.alert(
+      'Block friend?',
+      `You and ${row.title} will no longer be able to start or continue a direct chat.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => blockFriendship(row),
+        },
+      ]
+    );
   };
 
   return (
@@ -274,21 +328,36 @@ export default function MessagesScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
             {chatRows.length ? (
               chatRows.map((row) => (
-                <TouchableOpacity
-                  key={row.id}
-                  style={styles.chatRow}
-                  onPress={() => openChatRow(row)}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{row.initials}</Text>
-                  </View>
-                  <View style={styles.rowCopy}>
-                    <Text style={styles.rowTitle}>{row.title}</Text>
-                    <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#64748b" />
-                </TouchableOpacity>
+                <View key={row.id} style={styles.chatRow}>
+                  <TouchableOpacity
+                    style={styles.chatMain}
+                    onPress={() => openChatRow(row)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>{row.initials}</Text>
+                    </View>
+                    <View style={styles.rowCopy}>
+                      <Text style={styles.rowTitle}>{row.title}</Text>
+                      <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#64748b" />
+                  </TouchableOpacity>
+                  {row.type === 'direct' && row.friendshipId ? (
+                    <TouchableOpacity
+                      style={styles.blockButton}
+                      onPress={() => confirmBlockFriend(row)}
+                      disabled={blockingFriendshipId === row.friendshipId}
+                      activeOpacity={0.85}
+                    >
+                      {blockingFriendshipId === row.friendshipId ? (
+                        <ActivityIndicator color={theme.colors.danger} size="small" />
+                      ) : (
+                        <Ionicons name="ban-outline" size={18} color={theme.colors.danger} />
+                      )}
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
               ))
             ) : (
               <View style={styles.emptyState}>
@@ -464,6 +533,25 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 9,
+  },
+
+  chatMain: {
+    flex: 1,
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  blockButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
 
   avatar: {
