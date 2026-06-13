@@ -3,7 +3,10 @@
     "version": ">= 5.0.0"
   },
   "build": {
-    "android": {},
-    "ios": {}
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
   }
 }
